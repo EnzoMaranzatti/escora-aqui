@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Petróleo 500, same as the cover screen -->
+    <color name="launch_background">#2B777D</color>
+</resources>

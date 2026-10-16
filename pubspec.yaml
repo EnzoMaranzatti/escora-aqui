@@ -1,0 +1,51 @@
+name: escora_aqui
+description: "Escora aqui — ajuda verificada perto de você."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_map: ^8.3.2
+  flutter_svg: ^2.3.0
+  geocoding: ^5.0.0
+  geolocator: ^14.1.1
+  google_fonts: ^9.0.0
+  http: ^1.6.0
+  image_picker: ^1.2.4
+  latlong2: ^0.10.1
+  permission_handler: ^13.0.2
+  url_launcher: ^6.3.3
+  vector_map_tiles: ^9.0.0-beta.13
+  vector_tile_renderer: ^6.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/brand/
+    - assets/icons/
+    - assets/images/
+    - assets/images/places/
+    - assets/shapes/
+    - assets/map/
+
+  fonts:
+    - family: PhosphorRegular
+      fonts:
+        - asset: assets/fonts/Phosphor-Regular.ttf
+    - family: PhosphorFill
+      fonts:
+        - asset: assets/fonts/Phosphor-Fill.ttf
+    - family: PhosphorBold
+      fonts:
+        - asset: assets/fonts/Phosphor-Bold.ttf
