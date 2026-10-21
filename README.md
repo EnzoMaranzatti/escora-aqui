@@ -7,6 +7,10 @@ App Flutter (iOS e Android): mapa de instituições verificadas perto de você.
 ```bash
 flutter pub get
 flutter run
+
+xcrun simctl boot "iPhone 17 Pro"
+open -a /Applications/Xcode.app/Contents/Applications/DeviceHub.app
+flutter run
 ```
 
 Atalho de desenvolvimento para abrir uma tela direto:
