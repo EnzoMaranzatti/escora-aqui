@@ -56,7 +56,8 @@ Dez tabelas, criadas na fase 1 (mapa no [diagrama do banco](https://claude.ai/ar
 
 | O quê | Por quê |
 | --- | --- |
-| view `places_geo` | `places` com `lat` e `lng` em números (a coluna `location` volta em hexadecimal) |
+| view `places_geo` | `places` com `lat` e `lng` em números (a coluna `location` volta em hexadecimal), sem `responsible` e `phone` |
+| função `place_contacts(ids)` | nome e telefone do responsável, só para o dono do ponto e para a equipe |
 | `goals.helpers`, `goals.enrolled` | quem doa não vê as doações dos outros, mas a tela mostra "12 ajudaram" e "3 vagas" |
 | `donations.donor_name`, `monthly_gifts.donor_name`, `reviews.author_name` | o primeiro nome que a instituição e o perfil do ponto mostram (profiles é privado) |
 | `submissions.patch` | numa mudança de dados, o que vai para `places` se a equipe aprovar |
@@ -95,6 +96,8 @@ conferem quem chama.
 - **Revisão a cada 90 dias** (`last_reviewed`); a equipe vê os vencidos.
 - **Fila da equipe:** urgente com mais de 3 dias úteis (calculado no app).
 - **Aprovar** ativa o ponto e publica as metas guardadas; **ajuste** e **recusa** mandam motivo; **pausar** e **remover** tiram do mapa. Numa mudança de dados, ajuste e recusa só descartam a mudança (e despausam o Pix).
+- **Contato do responsável é privado:** `places.responsible` e `places.phone` não têm SELECT para `authenticated` (fase 8, privacidade). Coluna nova em `places` precisa entrar no `GRANT SELECT` dessa migração e na view `places_geo`.
+- **Apagar a conta** apaga antes os arquivos da pessoa no Storage (pelo app) e depois os dados (`delete_account`); as doações a outros pontos ficam sem doador e sem comprovante.
 - **Avisos** nascem só pelo banco (função `notify`, gatilhos e funções acima); o app não insere em `notices`.
 
 ## 6. Tarefas diárias e tempo real (fase 7)

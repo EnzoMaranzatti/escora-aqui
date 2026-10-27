@@ -113,6 +113,7 @@ supabase/
     …_fase6_equipe.sql           aprovar, ajuste, recusa, pausar, remover, reativar
     …_fase7_avisos.sql           tempo real e tarefa diária (pg_cron)
     …_fase8_conta.sql            apagar a própria conta
+    …_fase8_privacidade.sql      contato do responsável privado; comprovante sai junto com a conta
   seed.sql           dados de teste (14 pontos, 15 metas, 3 denúncias)
 ```
 

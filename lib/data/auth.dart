@@ -282,8 +282,10 @@ Future<({bool confirmarEmail, String? foto})> salvarDados({
   return (confirmarEmail: true, foto: link);
 }
 
-/// Apaga a conta e tudo o que é da pessoa (fase 8, função delete_account).
+/// Apaga a conta e tudo o que é da pessoa: primeiro os arquivos no Storage,
+/// depois os dados (fase 8, função delete_account).
 Future<void> apagarConta() async {
+  await remote.deleteMyFiles();
   await remote.deleteAccount();
   await sair();
 }

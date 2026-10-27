@@ -111,6 +111,15 @@ Future<Snapshot> loadAll({required LatLng center, required bool isTeam}) async {
 
   final places = [for (final r in rows.values) _place(r)];
   final byId = {for (final p in places) p.id: p};
+  // Nome e telefone do responsável não vêm na view (privacidade): só o dono
+  // do ponto e a equipe recebem, por esta função.
+  if (ids.isNotEmpty) {
+    for (final c in await _db.rpc('place_contacts', params: {'ids': ids}) as List) {
+      byId[c['id']]
+        ?..responsible = c['responsible'] as String
+        ..phone = c['phone'] as String;
+    }
+  }
   for (final g in goalRows) {
     byId[g['place_id']]?.goals.add(_goal(g));
   }
@@ -231,8 +240,8 @@ Place _place(Map<String, dynamic> r) {
     status: _enum(PlaceStatus.values, r['status'] as String),
     pixPaused: r['pix_paused'] as bool,
     lastReviewed: _time(r['last_reviewed']),
-    responsible: r['responsible'] as String,
-    phone: r['phone'] as String,
+    responsible: r['responsible'] as String? ?? '',
+    phone: r['phone'] as String? ?? '',
     photo: r['photo_path'] as String?,
     statusReason: r['status_reason'] as String?,
     statusMessage: r['status_message'] as String?,
@@ -545,6 +554,16 @@ Future<void> removePlace(String placeId, String reason) =>
 Future<void> reactivatePlace(String placeId) => _db.rpc('reactivate_place', params: {'place': placeId});
 
 // ── Conta (fase 8) ───────────────────────────────────────────
+
+/// Apaga as fotos e os comprovantes que a pessoa enviou (a pasta com o id
+/// dela em cada balde). O Supabase não deixa apagar arquivos por SQL.
+Future<void> deleteMyFiles() async {
+  for (final bucket in ['avatars', 'places', 'receipts']) {
+    final files = await _db.storage.from(bucket).list(path: _uid);
+    if (files.isEmpty) continue;
+    await _db.storage.from(bucket).remove([for (final f in files) '$_uid/${f.name}']);
+  }
+}
 
 Future<void> deleteAccount() => _db.rpc('delete_account');
 
