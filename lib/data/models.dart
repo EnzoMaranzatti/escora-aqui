@@ -100,6 +100,25 @@ class Goal {
   /// Value before the first confirmed donation can still change.
   bool get valueLocked => current > 0;
 
+  /// Copies what came from the database into this same object, so screens
+  /// that hold it show the new numbers.
+  void updateFrom(Goal o) {
+    deadline = o.deadline;
+    reason = o.reason;
+    target = o.target;
+    current = o.current;
+    item = o.item;
+    unit = o.unit;
+    cause = o.cause;
+    action = o.action;
+    status = o.status;
+    doneAt = o.doneAt;
+    helpers = o.helpers;
+    enrolled = o.enrolled;
+    published = o.published;
+    seenDone = o.seenDone;
+  }
+
   int get slotsLeft => (target - enrolled).round().clamp(0, 9999);
 
   String amount(double v) => switch (type) {
@@ -228,33 +247,12 @@ class Place {
   String responsible;
   String phone;
 
-  /// Local file path of the photo sent at signup.
+  /// photo_path: a Storage link, a bundled stock photo of the test points
+  /// (CC0, StockSnap, `assets/images/places/`) or, before the upload
+  /// finishes, the local file picked at signup.
   String? photo;
 
-  /// The uploaded photo; demo points fall back to a bundled stock photo
-  /// (CC0, StockSnap) in `assets/images/places/<id>.jpg`.
-  ImageProvider? get image {
-    if (photo != null) return FileImage(File(photo!));
-    if (_stockPhotos.contains(id)) return AssetImage('assets/images/places/$id.jpg');
-    return null;
-  }
-
-  static const _stockPhotos = {
-    'casa-exemplo',
-    'santo-dumont',
-    'liberal',
-    'semear',
-    'cozinha-jardim',
-    'lar-aurora',
-    'escola-viva',
-    'abrigo-recanto',
-    'vila-nova',
-    'patas',
-    'boa-vista',
-    'sao-lucas',
-    'sopao-esperanca',
-    'costura-solidaria',
-  };
+  ImageProvider? get image => photoImage(photo);
 
   /// Reason and message from the team (ajuste, recusa, pausa).
   String? statusReason;
@@ -291,6 +289,50 @@ class Place {
 
   bool get onMap => status == PlaceStatus.active;
 
+  /// Copies what came from the database into this same object (see
+  /// [Goal.updateFrom]). Goals keep their identity by id.
+  void updateFrom(Place o) {
+    name = o.name;
+    point = o.point;
+    kind = o.kind;
+    typeLabel = o.typeLabel;
+    neighborhood = o.neighborhood;
+    street = o.street;
+    number = o.number;
+    complement = o.complement;
+    cep = o.cep;
+    city = o.city;
+    hours = o.hours;
+    receiveDays = o.receiveDays;
+    about = o.about;
+    distributes = o.distributes;
+    causes = o.causes;
+    verifiedAt = o.verifiedAt;
+    cnpj = o.cnpj;
+    legalName = o.legalName;
+    cnpjStatus = o.cnpjStatus;
+    indicatedBy = o.indicatedBy;
+    accepts = o.accepts;
+    pixKeyType = o.pixKeyType;
+    pixKey = o.pixKey;
+    payee = o.payee;
+    status = o.status;
+    pixPaused = o.pixPaused;
+    lastReviewed = o.lastReviewed;
+    responsible = o.responsible;
+    phone = o.phone;
+    photo = o.photo;
+    statusReason = o.statusReason;
+    statusMessage = o.statusMessage;
+    final old = {for (final g in goals) g.id: g};
+    goals
+      ..clear()
+      ..addAll([for (final g in o.goals) (old[g.id]?..updateFrom(g)) ?? g]);
+    reviews
+      ..clear()
+      ..addAll(o.reviews);
+  }
+
   double kmFrom(LatLng p) => const Distance().as(LengthUnit.Meter, p, point) / 1000;
 
   int get daysSinceReview => DateTime.now().difference(lastReviewed).inDays;
@@ -324,6 +366,7 @@ class Donation {
     this.mine = false,
     this.when,
     this.receipt = false,
+    this.receiptPath,
     this.status = DonationStatus.waiting,
     this.confirmedAt,
     this.rated = false,
@@ -345,6 +388,9 @@ class Donation {
   /// Delivery date (itens) or the action day (voluntariado).
   final DateTime? when;
   final bool receipt;
+
+  /// Where the receipt is in the private Storage bucket (`donor/id.jpg`).
+  final String? receiptPath;
   DonationStatus status;
   DateTime? confirmedAt;
   bool rated;
@@ -434,6 +480,14 @@ class Notice {
   bool read;
 
   bool get forInstitution => kind.index >= NoticeKind.approved.index;
+}
+
+/// A photo saved as a Storage link, a bundled asset or a local file.
+ImageProvider? photoImage(String? path) {
+  if (path == null || path.isEmpty) return null;
+  if (path.startsWith('http')) return NetworkImage(path);
+  if (path.startsWith('assets/')) return AssetImage(path);
+  return FileImage(File(path));
 }
 
 const reportReasons = [

@@ -19,7 +19,6 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/kit.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/scaffolds.dart';
-import '../../../core/widgets/sheets.dart';
 import '../../../data/br_api.dart';
 import '../../../data/store.dart';
 import '../../map/escora_map.dart';
@@ -123,126 +122,37 @@ class _StepPerson extends StatefulWidget {
   State<_StepPerson> createState() => _StepPersonState();
 }
 
+/// No SMS code (paid service): the phone is a contact for the team, which
+/// checks it while reviewing the signup (product decision).
 class _StepPersonState extends State<_StepPerson> {
   late String _name = _d.responsible;
   late String _phone = _d.phone;
   bool _phoneTried = false;
-  bool _codeSent = false;
-  String _code = '';
-  String? _codeError;
-  String _sentCode = '';
-  DateTime? _sentAt;
-  int _wait = 0;
-  Timer? _timer;
-  bool _sending = false;
 
   bool get _phoneOk {
     final n = Fmt.digits(_phone).length;
     return n == 10 || n == 11;
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
+  void _continue() {
     FocusScope.of(context).unfocus();
     setState(() => _phoneTried = true);
     if (!_phoneOk || _name.trim().isEmpty) return;
-    setState(() => _sending = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    _sentCode = (100000 + math.Random().nextInt(899999)).toString();
-    _sentAt = DateTime.now();
-    setState(() {
-      _sending = false;
-      _codeSent = true;
-      _code = '';
-      _codeError = null;
-      _wait = 60;
-    });
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return;
-      setState(() => _wait--);
-      if (_wait <= 0) t.cancel();
-    });
-    // The demo has no SMS: the code arrives as an in-app message.
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted) {
-        Toast.show(
-          context,
-          'SMS · Escora aqui: seu código é $_sentCode',
-          icon: PhosphorIconsFill.chatCircleText,
-          duration: const Duration(seconds: 6),
-        );
-      }
-    });
-  }
-
-  void _confirm() {
-    FocusScope.of(context).unfocus();
-    if (_sentAt != null && DateTime.now().difference(_sentAt!) > const Duration(minutes: 5)) {
-      setState(() => _codeError = 'O código expirou. Peça um novo.');
-      return;
-    }
-    if (_code != _sentCode) {
-      setState(() => _codeError = 'Esse código não confere. Confira a mensagem ou peça um novo.');
-      return;
-    }
-    HapticFeedback.mediumImpact();
     _d
       ..responsible = _name.trim()
-      ..phone = _phone
-      ..phoneVerified = true;
+      ..phone = _phone;
     _next(context, 2, const _StepInstitution(), widget.fromReview);
   }
 
   @override
   Widget build(BuildContext context) {
-    final verified = _d.phoneVerified && _phone == _d.phone;
-    if (_codeSent && !verified) {
-      return FlowScaffold(
-        step: 1,
-        onBack: () => setState(() => _codeSent = false),
-        title: 'Digite o código que enviamos para $_phone',
-        primary: 'Confirmar',
-        primaryIcon: null,
-        onPrimary: _code.length == 6 ? _confirm : null,
-        children: [
-          _CodeField(
-            error: _codeError,
-            onChanged: (v) => setState(() {
-              _code = v;
-              _codeError = null;
-            }),
-          ),
-          const SizedBox(height: 18),
-          Center(
-            child: _wait > 0
-                ? Text('Reenviar em ${_wait}s', style: AppType.body(size: 14.5).copyWith(fontFeatures: tabular))
-                : LinkText('Reenviar código', onTap: _send),
-          ),
-        ],
-      );
-    }
     return FlowScaffold(
       step: 1,
       title: 'Quem é o responsável pelo ponto?',
       subtitle: 'Usamos esse contato só para falar sobre o cadastro. Ele não aparece no app.',
-      primary: verified ? 'Continuar' : 'Enviar código',
-      primaryIcon: verified ? 'assets/icons/arrow_right.svg' : null,
-      loading: _sending,
-      onPrimary: _name.trim().isEmpty
-          ? null
-          : verified
-          ? () {
-              _d.responsible = _name.trim();
-              _next(context, 2, const _StepInstitution(), widget.fromReview);
-            }
-          : _send,
+      primary: 'Continuar',
+      primaryIcon: 'assets/icons/arrow_right.svg',
+      onPrimary: _name.trim().isEmpty ? null : _continue,
       children: [
         AppTextField(
           label: 'Nome completo',
@@ -265,107 +175,8 @@ class _StepPersonState extends State<_StepPerson> {
           inputFormatters: [MaskFormatter.phone()],
           error: _phoneTried && !_phoneOk ? 'Confira o telefone: são DDD e mais 8 ou 9 números.' : null,
           onChanged: (v) => setState(() => _phone = v),
-          suffix: verified
-              ? const Padding(
-                  padding: EdgeInsets.only(right: 14),
-                  child: Icon(PhosphorIconsFill.checkCircle, size: 20, color: AppColors.sucessoBase),
-                )
-              : null,
+          onSubmitted: (_) => _continue(),
         ),
-      ],
-    );
-  }
-}
-
-/// Six-digit code drawn as boxes over a hidden field.
-class _CodeField extends StatefulWidget {
-  const _CodeField({required this.onChanged, this.error});
-
-  final ValueChanged<String> onChanged;
-  final String? error;
-
-  @override
-  State<_CodeField> createState() => _CodeFieldState();
-}
-
-class _CodeFieldState extends State<_CodeField> {
-  final _c = TextEditingController();
-  final _f = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _f.addListener(() => setState(() {}));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _f.requestFocus());
-  }
-
-  @override
-  void dispose() {
-    _c.dispose();
-    _f.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = _c.text;
-    final err = widget.error != null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Stack(
-          children: [
-            Opacity(
-              opacity: 0,
-              child: TextField(
-                controller: _c,
-                focusNode: _f,
-                keyboardType: TextInputType.number,
-                autofillHints: const [AutofillHints.oneTimeCode],
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
-                onChanged: (v) {
-                  setState(() {});
-                  widget.onChanged(v);
-                },
-              ),
-            ),
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () => _f.requestFocus(),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < 6; i++) ...[
-                      if (i > 0) const SizedBox(width: 8),
-                      Expanded(
-                        child: AnimatedContainer(
-                          duration: AppMotion.fast,
-                          decoration: BoxDecoration(
-                            color: AppColors.cinza50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: err
-                                  ? AppColors.erroBase
-                                  : (_f.hasFocus && i == t.length.clamp(0, 5))
-                                  ? AppColors.petroleo600
-                                  : AppColors.cinza200,
-                              width: err || (_f.hasFocus && i == t.length.clamp(0, 5)) ? 2 : 1,
-                            ),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(i < t.length ? t[i] : '', style: AppType.display(size: 24)),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        if (err) ...[
-          const SizedBox(height: 8),
-          Text(widget.error!, style: AppType.body(size: 13, color: AppColors.erroTexto)),
-        ],
       ],
     );
   }

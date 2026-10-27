@@ -76,7 +76,12 @@ flutter run --dart-define-from-file=env.json --dart-define=START=causes
 
 Valores: `intro`, `verified`, `goal`, `location`, `located`, `help`, `causes`,
 `notifications`, `account`, `create`, `login`, `home`, `inst` (modo
-instituição), `team` (painel da equipe), `returning`. Sem `START`, abre na capa.
+instituição), `team` (painel da equipe). Sem `START`, abre na capa (ou no mapa,
+se já houver uma conta conectada).
+
+`inst` e `team` usam a conta conectada de verdade: entre antes com uma conta que
+tenha ponto (para `inst`) ou que seja da equipe (para `team`), como
+`dev.drenato@gmail.com`. Sem isso, o app abre no mapa.
 
 Depois de usar um `START`, rode de novo sem ele. Senão o app instalado no
 simulador continua abrindo sempre naquela tela.
@@ -102,7 +107,13 @@ supabase/
     …_equipe.sql              submissions, reports
     …_indices.sql             índice do mapa e das chaves estrangeiras
     …_permissoes.sql          RLS: quem lê e escreve o quê
-  seed.sql           dados de teste (os pontos fictícios do seed.dart)
+    …_fase3_mapa_e_leitura.sql   view com lat/lng, busca por raio, nomes e contadores
+    …_fase4_doador.sql           regras da doação, avisos, Storage (fotos e comprovantes)
+    …_fase5_instituicao.sql      confirmar doação, metas, cadastro e mudanças do ponto
+    …_fase6_equipe.sql           aprovar, ajuste, recusa, pausar, remover, reativar
+    …_fase7_avisos.sql           tempo real e tarefa diária (pg_cron)
+    …_fase8_conta.sql            apagar a própria conta
+  seed.sql           dados de teste (14 pontos, 15 metas, 3 denúncias)
 ```
 
 ### CLI do Supabase
@@ -135,6 +146,10 @@ O `seed.sql` cria 14 pontos (12 ativos e 2 na fila da equipe), 15 metas e 3
 denúncias em volta do centro de São José do Rio Preto. Todos pertencem à conta
 `dev.drenato@gmail.com`, que também é da equipe (`is_team = true`). A conta
 precisa existir antes (Authentication → Users).
+
+A regra é "uma conta, um ponto", mas essa conta de teste tem os 14. No modo
+instituição ela mostra sempre a **Casa Exemplo** (o primeiro ponto ativo). Para
+testar o cadastro de um ponto do zero, use outra conta.
 
 ```bash
 supabase db push --include-seed
@@ -186,7 +201,7 @@ A atribuição "OpenStreetMap contributors / OpenFreeMap" aparece no mapa princi
 ```
 lib/
   core/        tema (cores, tipografia, motion), componentes, rotas, ícones
-  data/        modelos, store em memória (back-end falso), dados fictícios, BrasilAPI/ViaCEP
+  data/        modelos, store (estado das telas), remote (Supabase), auth (conta), BrasilAPI/ViaCEP
   features/
     splash/ intro/ signup/ auth/   capa, onboarding, conta
     home/ map/ place/              mapa, pins e perfil do ponto
@@ -205,16 +220,21 @@ docs/BACKEND.md  passagem para o back-end
 | ------------------- | ---------------------------------------------------------------- | ---------- |
 | 1 · Fundação     | tabelas, permissões, dados de teste, app ligado ao Supabase     | pronta     |
 | 2 · Contas         | criar conta, login (e-mail e Google), perfil do onboarding       | pronta no iOS (Google no Android pendente) |
-| 3 · Mapa e leitura | pontos por raio, perfil do ponto e metas vindos do banco         |            |
-| 4 · Doador         | registrar doações, seguir, avaliar, denunciar, doação mensal |            |
-| 5 · Instituição  | cadastro, fotos, confirmar doações, metas, troca de chave Pix  |            |
-| 6 · Equipe         | fila de validação, denúncias, pausar e remover pontos         |            |
-| 7 · Avisos         | lembretes diários, avisos em tempo real, push                   |            |
-| 8 · Produção     | termos, LGPD, testes, backup                                     |            |
+| 3 · Mapa e leitura | pontos por raio, perfil do ponto e metas vindos do banco         | pronta     |
+| 4 · Doador         | registrar doações, seguir, avaliar, denunciar, doação mensal | pronta     |
+| 5 · Instituição  | cadastro, fotos, confirmar doações, metas, troca de chave Pix  | pronta (sem SMS: decisão de produto) |
+| 6 · Equipe         | fila de validação, denúncias, pausar e remover pontos         | pronta     |
+| 7 · Avisos         | lembretes diários, avisos em tempo real, push                   | pronta, sem push (exige conta paga da Apple) |
+| 8 · Produção     | termos, LGPD, testes, backup                                     | termos, privacidade e apagar conta prontos; backup é manual |
 
-Conta e login (e-mail e Google) já são de verdade (`lib/data/auth.dart`): o cadastro
-cria a conta no Supabase, as escolhas do onboarding e os dados do perfil ficam
-em `profiles`, e quem já entrou abre o app direto no mapa. O resto das telas
-ainda usa os dados em memória (`lib/data/store.dart`), que somem ao fechar o
-app. SMS, avisos e respostas das instituições continuam simulados até as
-próximas fases. Detalhes em [`docs/BACKEND.md`](docs/BACKEND.md).
+Tudo vem do Supabase. As telas leem o `store` (`lib/data/store.dart`); cada
+ação do store mostra o resultado na hora, grava pelo `lib/data/remote.dart` e
+recarrega do banco. As regras que não podem depender do app (a meta só sobe com
+confirmação, vagas do voluntariado, quem vê o quê) estão nas funções e gatilhos
+das migrações. Detalhes em [`docs/BACKEND.md`](docs/BACKEND.md).
+
+**Backup:** o plano gratuito não guarda backups para baixar. De vez em quando:
+`supabase db dump --linked -f backup.sql` (e não suba esse arquivo para o Git).
+
+**Pausa do plano gratuito:** o Supabase pausa o projeto depois de 1 semana sem
+uso. Abra o app ou o painel uns dias antes de apresentar.

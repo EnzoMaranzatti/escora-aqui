@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (!mounted) return;
-    context.replaceAll(const DonorShell(returning: true));
+    context.replaceAll(const DonorShell());
   }
 
   void _fail(String message) {
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (!mounted) return;
     if (!signedIn) return setState(() => _loading = false);
-    context.replaceAll(const DonorShell(returning: true));
+    context.replaceAll(const DonorShell());
   }
 
   void _forgot() => context.push(ResetPasswordScreen(email: _email.trim()));

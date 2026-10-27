@@ -8,6 +8,7 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/kit.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
+import '../../data/remote.dart' as remote;
 import '../../data/store.dart';
 import '../shared/help_ui.dart';
 
@@ -139,6 +140,26 @@ class _PendingTile extends StatelessWidget {
         children: [
           Text('Comprovante', style: AppType.title().copyWith(fontSize: 22)),
           const SizedBox(height: 16),
+          // The photo the donor sent (private bucket: a link valid for 1 hour).
+          if (d.receiptPath case final path?) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: FutureBuilder<String>(
+                future: remote.receiptUrl(path),
+                builder: (context, snap) => snap.hasData
+                    ? Image.network(snap.data!, height: 320, fit: BoxFit.contain)
+                    : Container(
+                        height: 320,
+                        color: AppColors.cinza50,
+                        alignment: Alignment.center,
+                        child: snap.hasError
+                            ? Text('Não deu para abrir o comprovante.', style: AppType.body(size: 14))
+                            : const CircularProgressIndicator(color: AppColors.petroleo600),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(

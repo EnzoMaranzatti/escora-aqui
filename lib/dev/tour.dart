@@ -39,8 +39,7 @@ class _TourScreenState extends State<TourScreen> {
   @override
   void initState() {
     super.initState();
-    store.init(returning: true);
-    store.seedDemoInstitution();
+    store.init();
     _timer = Timer.periodic(const Duration(milliseconds: 400), (_) => _poll());
   }
 
@@ -173,7 +172,7 @@ class _TourScreenState extends State<TourScreen> {
     return switch (_root) {
       'inst' => const InstitutionShell(),
       'team' => const TeamShell(),
-      _ => const DonorShell(returning: true),
+      _ => const DonorShell(),
     };
   }
 }

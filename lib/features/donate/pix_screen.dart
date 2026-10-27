@@ -153,7 +153,6 @@ class DeclareScreen extends StatefulWidget {
 class _DeclareScreenState extends State<DeclareScreen> {
   String _value = '';
   bool _tried = false;
-  bool _loading = false;
   XFile? _receipt;
 
   String? get _error {
@@ -178,13 +177,11 @@ class _DeclareScreenState extends State<DeclareScreen> {
     FocusScope.of(context).unfocus();
     setState(() => _tried = true);
     if (_error != null) return;
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 1100));
-    if (!mounted) return;
     final p = store.place(widget.placeId);
     final g = store.goal(p, widget.goalId)!;
     final amount = Fmt.parseMoney(_value.trim())!;
-    store.registerPix(p, g, amount, receipt: _receipt != null);
+    // Saved in the background; the receipt photo goes to Storage first.
+    store.registerPix(p, g, amount, receiptFile: _receipt?.path);
     context.push(RegisteredScreen.pix(place: p, amount: amount));
   }
 
@@ -196,8 +193,6 @@ class _DeclareScreenState extends State<DeclareScreen> {
       subtitle: 'A ${p.name} vai conferir o recebimento. Quando ela confirmar, a meta avança.',
       primary: 'Registrar doação',
       primaryIcon: null,
-      loading: _loading,
-      note: _loading ? Text('Registrando sua doação…', style: AppType.body(size: 14)) : null,
       onPrimary: _submit,
       secondary: 'Voltar',
       onSecondary: () => Navigator.pop(context),

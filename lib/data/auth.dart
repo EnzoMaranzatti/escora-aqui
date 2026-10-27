@@ -9,6 +9,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'remote.dart' as remote;
 import 'store.dart';
 
 // Atalho para o cliente do supabase, que o main.dart já ligou
@@ -175,6 +176,7 @@ Future<void> sair() async {
   } catch (_) {
     // Mesmo sem internet, a sessão salva no aparelho já foi apagada.
   }
+  await store.reset();
   store
     ..name = 'você'
     ..fullName = ''
@@ -209,6 +211,7 @@ Future<void> carregarPerfil() async {
     ..fullName = nome
     ..name = primeiro.isEmpty ? 'você' : primeiro
     ..userPhone = perfil['phone'] as String? ?? ''
+    ..avatar = perfil['avatar_path'] as String?
     ..birthDate = nascimento == null ? null : DateTime.parse(nascimento)
     ..notifyGoals = perfil['notify_goals'] as bool
     ..notifyConfirm = perfil['notify_confirm'] as bool
@@ -251,27 +254,38 @@ Future<void> salvarPreferencias() async {
   }
 }
 
-/// "Meus dados": nome, celular e nascimento vão para profiles.
-/// Um e-mail novo só vale depois que a pessoa clica no link que o Supabase manda.
-/// Devolve true quando o e-mail ficou esperando essa confirmação.
-Future<bool> salvarDados({
+/// "Meus dados": nome, celular, nascimento e foto vão para profiles.
+/// A foto escolhida no aparelho sobe para o Storage (balde "avatars") e o
+/// perfil guarda o link. Um e-mail novo só vale depois que a pessoa clica
+/// no link que o Supabase manda.
+/// Devolve se o e-mail ficou esperando essa confirmação e o link da foto.
+Future<({bool confirmarEmail, String? foto})> salvarDados({
   required String nomeCompleto,
   required String email,
   required String celular,
   required DateTime? nascimento,
+  required String? foto,
 }) async {
   final usuario = _supabase.auth.currentUser;
-  if (usuario == null) return false; // modo demonstração, sem conta
+  if (usuario == null) return (confirmarEmail: false, foto: foto); // modo demonstração, sem conta
+  final link = foto == null || foto.startsWith('http') ? foto : await remote.uploadPublicPhoto('avatars', foto);
   await _supabase.from('profiles').update({
     'full_name': nomeCompleto,
     'first_name': nomeCompleto.split(' ').first,
     'phone': celular.isEmpty ? null : celular,
     'birth_date': nascimento?.toIso8601String().substring(0, 10),
+    'avatar_path': link,
   }).eq('id', usuario.id);
 
-  if (email == usuario.email) return false;
+  if (email == usuario.email) return (confirmarEmail: false, foto: link);
   await _supabase.auth.updateUser(UserAttributes(email: email));
-  return true;
+  return (confirmarEmail: true, foto: link);
+}
+
+/// Apaga a conta e tudo o que é da pessoa (fase 8, função delete_account).
+Future<void> apagarConta() async {
+  await remote.deleteAccount();
+  await sair();
 }
 
 /// A coluna position volta do banco em hexadecimal (EWKB):

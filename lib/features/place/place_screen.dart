@@ -48,7 +48,15 @@ class _PlaceScreenState extends State<PlaceScreen> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final p = store.place(widget.placeId);
+        // A point can leave the map while open (paused by the team).
+        final p = store.placeOrNull(widget.placeId);
+        if (p == null) {
+          return const FlowScaffold(
+            title: 'Este ponto saiu do mapa.',
+            subtitle: 'A equipe está conferindo as informações dele. Seus registros continuam em Minhas doações.',
+            children: [],
+          );
+        }
         final pad = MediaQuery.paddingOf(context);
         final here = onboarding.position ?? store.center;
         return AnnotatedRegion<SystemUiOverlayStyle>(

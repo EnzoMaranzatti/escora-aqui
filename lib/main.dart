@@ -34,8 +34,12 @@ Future<void> main() async {
     url: const String.fromEnvironment('SUPABASE_URL'),
     publishableKey: const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
   );
-  // Quem já entrou antes abre direto no mapa.
+  // Quem já entrou antes abre direto no mapa, com os dados já carregados
+  // (enquanto isso, o iPhone mostra a tela de abertura).
   final loggedIn = await restaurarSessao();
+  if (loggedIn) await store.init().timeout(const Duration(seconds: 10), onTimeout: () {});
+  // Quando o banco recusa uma ação, a mensagem aparece como aviso.
+  store.errors.stream.listen(_showError);
   // O link de "Esqueci minha senha" abre o app na tela de senha nova.
   ouvirLinkDeSenha(abrirSenhaNova: _openNewPassword, linkInvalido: _invalidResetLink);
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -54,6 +58,12 @@ void _openNewPassword() {
     return;
   }
   nav.push(EscoraRoute(const NewPasswordScreen()));
+}
+
+void _showError(String message) {
+  final nav = _navigator.currentState;
+  if (nav == null) return;
+  Toast.show(nav.overlay!.context, message, icon: PhosphorIconsFill.warningCircle, duration: const Duration(seconds: 5));
 }
 
 void _invalidResetLink() {
@@ -119,7 +129,7 @@ class EscoraApp extends StatelessWidget {
 /// underneath, so "Voltar" still works.
 List<Widget> _startStack(bool loggedIn) {
   const start = String.fromEnvironment('START');
-  if (start.isEmpty) return [loggedIn ? const DonorShell(returning: true) : const SplashScreen()];
+  if (start.isEmpty) return [loggedIn ? const DonorShell() : const SplashScreen()];
   if (start == 'showreel') return const [ShowreelScreen()];
   if (start == 'tour') return const [TourScreen()];
 
@@ -172,18 +182,16 @@ List<Widget> _startStack(bool loggedIn) {
   };
   if (target == 'login') return const [cover, LoginScreen()];
   if (target == 'home') return const [DonorShell()];
-  if (target == 'returning') return const [DonorShell(returning: true)];
+  if (target == 'returning') return const [DonorShell()];
+  // Precisam de uma conta que já entrou: com ponto (inst) ou da equipe (team).
   if (target == 'inst') {
-    store
-      ..init(returning: true)
-      ..seedDemoInstitution()
-      ..setMode(AppMode.institution);
+    if (!loggedIn || store.myPoint == null) return const [DonorShell()];
+    store.setMode(AppMode.institution);
     return const [InstitutionShell()];
   }
   if (target == 'team') {
-    store
-      ..init(returning: true)
-      ..setMode(AppMode.team);
+    if (!loggedIn || !store.isTeam) return const [DonorShell()];
+    store.setMode(AppMode.team);
     return const [TeamShell()];
   }
   if (!flow.containsKey(target)) return const [SplashScreen()];

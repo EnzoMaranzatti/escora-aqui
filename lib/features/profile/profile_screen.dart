@@ -17,6 +17,7 @@ import '../institution/register/register_flow.dart';
 import '../map/pins.dart';
 import '../place/place_screen.dart';
 import 'edit_profile_screen.dart';
+import 'text_pages.dart';
 import '../shared/help_ui.dart';
 import '../signup/city_sheet.dart';
 import '../signup/places_service.dart';
@@ -55,8 +56,32 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  void _soon(BuildContext context) =>
-      Toast.show(context, 'Essa página chega na próxima versão.', icon: PhosphorIconsFill.info);
+  /// LGPD (and the App Store) ask for this inside the app.
+  Future<void> _deleteAccount(BuildContext context) async {
+    final ok = await confirmSheet(
+      context,
+      title: 'Apagar sua conta de vez?',
+      text:
+          'Saem seus dados, suas doações mensais e o ponto que você cadastrou. As instituições ficam com o histórico das doações, sem o seu nome. Não dá para desfazer.',
+      confirm: 'Apagar minha conta',
+      cancel: 'Manter conta',
+      destructive: true,
+    );
+    if (ok == null || !context.mounted) return;
+    try {
+      await apagarConta();
+    } catch (_) {
+      if (context.mounted) {
+        Toast.show(
+          context,
+          'Não deu para apagar agora. Confira a internet e tente de novo.',
+          icon: PhosphorIconsFill.warningCircle,
+        );
+      }
+      return;
+    }
+    if (context.mounted) context.replaceAll(const SplashScreen(startAtEnd: true));
+  }
 
   Future<void> _logout(BuildContext context) async {
     final ok = await confirmSheet(
@@ -298,14 +323,14 @@ class ProfileScreen extends StatelessWidget {
                           icon: PhosphorIconsRegular.question,
                           title: 'Ajuda',
                           chevron: true,
-                          onTap: () => _soon(context),
+                          onTap: () => context.push(TextPage.help),
                         ),
                         const Hairline(indent: 48),
                         InfoRow(
                           icon: PhosphorIconsRegular.fileText,
                           title: 'Termos de uso e privacidade',
                           chevron: true,
-                          onTap: () => _soon(context),
+                          onTap: () => context.push(TextPage.terms),
                         ),
                         const Hairline(indent: 48),
                         InfoRow(
@@ -313,6 +338,13 @@ class ProfileScreen extends StatelessWidget {
                           title: 'Sair da conta',
                           titleColor: AppColors.erroTexto,
                           onTap: () => _logout(context),
+                        ),
+                        const Hairline(indent: 48),
+                        InfoRow(
+                          icon: PhosphorIconsRegular.trash,
+                          title: 'Apagar minha conta',
+                          titleColor: AppColors.erroTexto,
+                          onTap: () => _deleteAccount(context),
                         ),
                       ],
                     ),

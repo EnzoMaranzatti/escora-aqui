@@ -202,7 +202,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
           'O favorecido é a instituição (ou o responsável, se não há CNPJ)?',
           null,
         ),
-      ('Responsável', '${p.responsible} · telefone confirmado', null, null),
+      ('Responsável', '${p.responsible} · ${p.phone}', 'O telefone atende e é de quem cuida do ponto?', null),
     ];
   }
 
@@ -248,7 +248,22 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Widget build(BuildContext context) {
     final s = widget.submission;
     final changes = s.kind == SubmissionKind.mudanca;
-    final items = changes ? [for (final e in s.changes.entries) (e.key, e.value, null, null)] : _items;
+    final items = changes
+        ? [
+            for (final e in s.changes.entries)
+              e.key == 'Foto' && photoImage(e.value) != null
+                  ? (
+                      'Foto',
+                      'Foto nova',
+                      'A foto mostra o local de verdade?',
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: Image(image: photoImage(e.value)!, height: 140, width: double.infinity, fit: BoxFit.cover),
+                      ),
+                    )
+                  : (e.key, e.value, null, null),
+          ]
+        : _items;
     final missing = items.length - _checked.length;
     return FlowScaffold(
       title: _p.name,

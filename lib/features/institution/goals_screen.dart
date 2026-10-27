@@ -269,8 +269,7 @@ class DoneGoalCard extends StatelessWidget {
             filled: true,
             color: AppColors.sucessoBase,
             onTap: () {
-              g.seenDone = true;
-              store.touch();
+              store.markGoalSeen(g);
               context.push(const GoalFlow());
             },
           ),

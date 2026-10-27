@@ -1,9 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException, StorageException;
 
 import '../../core/format.dart';
 import '../../core/icons.dart';
@@ -34,8 +32,13 @@ class ProfileAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(color: AppColors.petroleo600, shape: BoxShape.circle),
       alignment: Alignment.center,
-      child: photo != null
-          ? Image.file(File(photo!), width: size, height: size, fit: BoxFit.cover, cacheWidth: (size * 3).round())
+      child: photoImage(photo) != null
+          ? Image(
+              image: ResizeImage.resizeIfNeeded((size * 3).round(), null, photoImage(photo)!),
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+            )
           : Text(
               letter,
               style: AppType.cardTitle(size: size * .4, color: AppColors.white),
@@ -129,18 +132,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
     setState(() => _saving = true);
     final bool confirmEmail;
+    final String? photo;
     try {
-      confirmEmail = await salvarDados(
+      (confirmarEmail: confirmEmail, foto: photo) = await salvarDados(
         nomeCompleto: _name.trim(),
         email: _email.trim(),
         celular: _phone,
         nascimento: _birthDate,
+        foto: _avatar,
       );
     } on AuthException catch (erro) {
       _fail(mensagemDeErro(erro));
       return;
     } on PostgrestException {
       _fail('Não deu para salvar agora. Confira a internet e tente de novo.');
+      return;
+    } on StorageException {
+      _fail('Não deu para enviar a foto. Tente de novo.');
       return;
     }
     if (!mounted) return;
@@ -150,7 +158,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       email: confirmEmail ? store.email : _email.trim(),
       phone: _phone,
       birthDate: _birthDate,
-      avatar: _avatar,
+      avatar: photo,
     );
     HapticFeedback.lightImpact();
     Toast.show(

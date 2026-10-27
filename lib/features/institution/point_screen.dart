@@ -148,7 +148,19 @@ class PointScreen extends StatelessWidget {
     return showAppSheet<void>(
       context,
       builder: (context) =>
-          _EditField(label: label, value: value, hint: hint, help: help, max: max, optional: optional, onSave: save),
+          _EditField(
+            label: label,
+            value: value,
+            hint: hint,
+            help: help,
+            max: max,
+            optional: optional,
+            // These texts don't go through the team: saved right away.
+            onSave: (v) {
+              save(v);
+              if (store.myPoint case final p?) store.savePlaceInfo(p);
+            },
+          ),
     );
   }
 

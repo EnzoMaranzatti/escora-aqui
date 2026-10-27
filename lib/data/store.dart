@@ -2,17 +2,18 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestException, RealtimeChannel, StorageException, Supabase;
 
-import '../core/format.dart';
 import 'models.dart';
-import 'seed.dart';
+import 'remote.dart' as remote;
 
 export 'models.dart';
 
 enum AppMode { donor, institution, team }
 
-/// Signup draft for the institution's point. Saved at every step, so the
-/// person continues where they stopped.
+/// Signup draft for the institution's point. Kept on the device while the
+/// person goes through the 5 steps; it reaches the database on "Enviar".
 class PointDraft {
   int step = 0;
   String responsible = '';
@@ -46,9 +47,11 @@ class PointDraft {
   bool declared = false;
 }
 
-/// App-wide state for the prototype (no backend yet). Donor, institution
-/// and team modes read the same data, so the demo closes the loop: a donor
-/// registers a Pix, the institution confirms it, the team approves points.
+/// App-wide state. Screens read the lists here and call the actions below.
+/// The data comes from Supabase (lib/data/remote.dart): each action updates
+/// the screen right away, saves in the background and then reloads, so the
+/// app ends up exactly like the database. If the database refuses (no slots
+/// left, goal closed…), [errors] carries the message and the reload undoes it.
 class AppStore extends ChangeNotifier {
   // ── Account ───────────────────────────────────────────────
   String name = 'você';
@@ -57,7 +60,7 @@ class AppStore extends ChangeNotifier {
   String userPhone = '';
   DateTime? birthDate;
 
-  /// Local path of the profile photo picked from the gallery.
+  /// Profile photo: a Storage link, or the local file just picked.
   String? avatar;
 
   void updateProfile({
@@ -77,8 +80,8 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Demo accounts belong to the team ("vocês dois na demonstração").
-  bool isTeam = true;
+  /// Validation team member (profiles.is_team, set only in the database).
+  bool isTeam = false;
   AppMode mode = AppMode.donor;
 
   // ── Data ──────────────────────────────────────────────────
@@ -108,107 +111,134 @@ class AppStore extends ChangeNotifier {
   /// "Aprovado" shows once, the first time the mode opens after approval.
   bool approvalSeen = false;
 
+  // ── Sync ──────────────────────────────────────────────────
+  /// Messages for the person when the database refuses an action
+  /// (main.dart shows them as a toast).
+  final errors = StreamController<String>.broadcast();
+
+  /// True until the first load finishes.
+  bool loading = true;
+
   bool _ready = false;
-  int _id = 0;
-  final _timers = <Timer>[];
+  Future<void>? _loading;
+  bool _again = false;
+  RealtimeChannel? _channel;
 
-  /// When true, seeded institutions confirm a Pix some seconds after it is
-  /// registered, so the demo shows the whole cycle.
-  static const simulateReplies = true;
+  String nextId(String _) => remote.newId();
 
-  String nextId(String p) => '$p${++_id}';
-
-  void init({LatLng? at, bool returning = false}) {
-    if (_ready) return;
+  /// Loads everything the first time a shell opens.
+  Future<void> init() {
+    if (_ready) return _loading ?? Future.value();
     _ready = true;
-    center = at ?? onboarding.position ?? center;
-    places.addAll(seedPlaces(center));
-    queue.addAll(seedQueue(center));
-    reports.addAll(seedReports());
+    center = onboarding.position ?? center;
     filterCauses.addAll(onboarding.selectedCauses);
-    if (returning) _seedHistory();
+    return refresh();
   }
 
-  /// History for someone who logs back in (a new account starts empty).
-  void _seedHistory() {
-    DateTime ago(int d) => DateTime.now().subtract(Duration(days: d));
-    donations.addAll([
-      Donation(
-        id: nextId('d'),
-        placeId: 'lar-aurora',
-        goalId: 'g8',
-        type: HelpType.pix,
-        amount: 50,
-        date: ago(9),
-        donor: name,
-        mine: true,
-        status: DonationStatus.confirmed,
-        confirmedAt: ago(8),
-      ),
-      Donation(
-        id: nextId('d'),
-        placeId: 'casa-exemplo',
-        goalId: 'g1',
-        type: HelpType.itens,
-        amount: 3,
-        date: ago(5),
-        donor: name,
-        mine: true,
-        when: ago(4),
-        status: DonationStatus.confirmed,
-        confirmedAt: ago(4),
-        rated: true,
-      ),
-      Donation(
-        id: nextId('d'),
-        placeId: 'santo-dumont',
-        goalId: 'g3',
-        type: HelpType.pix,
-        amount: 30,
-        date: ago(3),
-        donor: name,
-        mine: true,
-        status: DonationStatus.notFound,
-      ),
-    ]);
-    notices.addAll([
-      Notice(
-        id: nextId('n'),
-        kind: NoticeKind.notFound,
-        title: 'A Instituição Santo Dumont não encontrou sua doação',
-        text: 'Confira o comprovante em Minhas doações.',
-        date: ago(2),
-        placeId: 'santo-dumont',
-      ),
-      Notice(
-        id: nextId('n'),
-        kind: NoticeKind.goalDone,
-        title: 'A meta de Associação Vila Nova foi concluída',
-        text: 'R\$ 2.500 arrecadados. Obrigado por fazer parte.',
-        date: ago(2),
-        placeId: 'vila-nova',
-      ),
-      Notice(
-        id: nextId('n'),
-        kind: NoticeKind.confirmed,
-        title: 'Sua doação foi confirmada',
-        text: 'A Lar Aurora confirmou o recebimento de R\$ 50,00.',
-        date: ago(8),
-        placeId: 'lar-aurora',
-        read: true,
-      ),
-    ]);
-  }
-
-  @override
-  void dispose() {
-    for (final t in _timers) {
-      t.cancel();
+  /// Reads everything again from the database. Calls that arrive during a
+  /// load wait for it and run once more at the end.
+  Future<void> refresh() {
+    if (_loading != null) {
+      _again = true;
+      return _loading!;
     }
-    super.dispose();
+    return _loading = _load().whenComplete(() {
+      _loading = null;
+      if (_again) {
+        _again = false;
+        refresh();
+      }
+    });
   }
 
-  void _later(Duration d, VoidCallback f) => _timers.add(Timer(d, f));
+  Future<void> _load() async {
+    if (Supabase.instance.client.auth.currentUser == null) return;
+    try {
+      final s = await remote.loadAll(center: center, isTeam: isTeam);
+      _apply(s);
+    } catch (e) {
+      debugPrint('store: load failed: $e');
+      if (loading) errors.add('Não deu para carregar os pontos. Confira a internet.');
+    }
+    loading = false;
+    _channel ??= remote.listen(isTeam: isTeam, onChange: refresh);
+    notifyListeners();
+  }
+
+  void _apply(remote.Snapshot s) {
+    // Same objects for the same ids, so open screens show the new data.
+    final old = {for (final p in places) p.id: p};
+    places
+      ..clear()
+      ..addAll([for (final p in s.places) (old[p.id]?..updateFrom(p)) ?? p]);
+    myPointId = s.myPointId;
+    donations
+      ..clear()
+      ..addAll(s.donations);
+    monthly
+      ..clear()
+      ..addAll(s.monthly);
+    followed
+      ..clear()
+      ..addAll(s.followed);
+    notices
+      ..clear()
+      ..addAll(s.notices);
+    final byId = {for (final p in places) p.id: p};
+    queue
+      ..clear()
+      ..addAll([
+        for (final q in s.queue)
+          Submission(id: q.id, place: byId[q.place.id]!, kind: q.kind, sentAt: q.sentAt, changes: q.changes),
+      ]);
+    reports
+      ..clear()
+      ..addAll(s.reports);
+  }
+
+  /// Logout: forgets everything that belonged to the person.
+  Future<void> reset() async {
+    if (_channel != null) await remote.stopListening(_channel!);
+    _channel = null;
+    _ready = false;
+    loading = true;
+    for (final l in <List<Object>>[places, donations, notices, reports, queue, monthly]) {
+      l.clear();
+    }
+    followed.clear();
+    filterTypes.clear();
+    filterCauses.clear();
+    myPointId = null;
+    draft = null;
+    mode = AppMode.donor;
+    isTeam = false;
+    approvalSeen = false;
+    mapCenter = null;
+    radiusKm = 5;
+    notifyListeners();
+  }
+
+  /// Saves in the background, then reloads (also after an error, to undo
+  /// what the screen showed ahead of time).
+  void _save(Future<void> Function() call) {
+    notifyListeners();
+    call().then(
+      (_) => refresh(),
+      onError: (Object e) {
+        debugPrint('store: save failed: $e');
+        errors.add(_message(e));
+        refresh();
+      },
+    );
+  }
+
+  /// Messages written in the SQL functions (RAISE EXCEPTION) are already
+  /// for the person; anything else becomes a generic message.
+  static String _message(Object e) {
+    if (e is PostgrestException && e.code == 'P0001') return e.message;
+    if (e is StorageException) return 'Não deu para enviar a foto. Tente de novo.';
+    return 'Não deu para salvar agora. Confira a internet e tente de novo.';
+  }
 
   void touch() => notifyListeners();
 
@@ -223,7 +253,10 @@ class AppStore extends ChangeNotifier {
 
   List<Place> get verifiedPlaces => places.where((p) => p.verifiedAt != null && p.onMap).toList();
 
-  List<Donation> get myDonations => donations.where((d) => d.mine).toList()..sort((a, b) => b.date.compareTo(a.date));
+  /// Only donations whose point is loaded (a paused point leaves the map).
+  List<Donation> get myDonations =>
+      donations.where((d) => d.mine && placeOrNull(d.placeId) != null).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
 
   int get unread => notices.where((n) => !n.read).length;
 
@@ -246,15 +279,16 @@ class AppStore extends ChangeNotifier {
 
   void follow(String placeId) {
     followed.add(placeId);
-    notifyListeners();
+    _save(() => remote.follow(placeId));
   }
 
   void unfollow(String placeId) {
     followed.remove(placeId);
-    notifyListeners();
+    _save(() => remote.unfollow(placeId));
   }
 
-  Donation registerPix(Place p, Goal g, double amount, {required bool receipt}) {
+  /// [receiptFile]: the receipt photo picked on the device, if any.
+  Donation registerPix(Place p, Goal g, double amount, {String? receiptFile}) {
     final d = Donation(
       id: nextId('d'),
       placeId: p.id,
@@ -264,15 +298,10 @@ class AppStore extends ChangeNotifier {
       date: DateTime.now(),
       donor: name,
       mine: true,
-      receipt: receipt,
+      receipt: receiptFile != null,
     );
     donations.add(d);
-    notifyListeners();
-    if (simulateReplies && p.id != myPointId) {
-      _later(const Duration(seconds: 25), () {
-        if (d.status == DonationStatus.waiting) confirm(d);
-      });
-    }
+    _save(() => remote.insertDonation(d, receiptFile: receiptFile));
     return d;
   }
 
@@ -290,7 +319,7 @@ class AppStore extends ChangeNotifier {
       status: DonationStatus.itemsAgreed,
     );
     donations.add(d);
-    notifyListeners();
+    _save(() => remote.insertDonation(d));
     return d;
   }
 
@@ -309,66 +338,43 @@ class AppStore extends ChangeNotifier {
       status: DonationStatus.enrolled,
     );
     donations.add(d);
-    final tomorrow = Fmt.dateOnly(DateTime.now()).add(const Duration(days: 1));
-    if (notifyVolunteer && Fmt.dateOnly(g.action!.day) == tomorrow) {
-      _notice(
-        NoticeKind.volunteerReminder,
-        'Amanhã: ${g.action!.name}',
-        'Das ${Fmt.hour(g.action!.start)} às ${Fmt.hour(g.action!.end)}, em ${p.address}.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
+    _save(() => remote.insertDonation(d));
     return d;
   }
 
   void cancelEnrollment(Donation d) {
-    final p = place(d.placeId);
-    final g = goal(p, d.goalId);
+    final g = goal(place(d.placeId), d.goalId);
     if (g != null && g.enrolled > 0) g.enrolled--;
     d.status = DonationStatus.cancelled;
-    notifyListeners();
+    _save(() => remote.cancelEnrollment(d.id));
   }
 
   void rate(Donation d, int stars, String comment) {
     place(d.placeId).reviews.insert(0, Review(name, DateTime.now(), stars, comment.trim()));
     d.rated = true;
-    notifyListeners();
+    _save(() => remote.rate(d, stars, comment.trim()));
   }
 
   void report(String placeId, String reason, String text) {
-    reports.add(Report(placeId: placeId, reason: reason, text: text.trim(), date: DateTime.now()));
-    notifyListeners();
+    _save(() => remote.report(placeId, reason, text.trim()));
   }
 
   void markRead(Notice n) {
     n.read = true;
-    notifyListeners();
+    _save(() => remote.markRead(n.id));
   }
 
   void markAllRead() {
     for (final n in notices) {
       n.read = true;
     }
-    notifyListeners();
+    _save(remote.markAllRead);
   }
-
-  void _notice(NoticeKind kind, String title, String text, {String? placeId}) {
-    notices.insert(
-      0,
-      Notice(id: nextId('n'), kind: kind, title: title, text: text, date: DateTime.now(), placeId: placeId),
-    );
-  }
-
-  String _what(Donation d, Goal? g) => switch (d.type) {
-    HelpType.pix => Fmt.money(d.amount),
-    _ => g?.amount(d.amount) ?? Fmt.count(d.amount),
-  };
 
   // ── Donor: monthly Pix ────────────────────────────────────
   MonthlyGift? monthlyFor(String placeId) => monthly.where((m) => m.mine && m.placeId == placeId).firstOrNull;
 
-  List<MonthlyGift> get myMonthly => monthly.where((m) => m.mine).toList();
+  List<MonthlyGift> get myMonthly => monthly.where((m) => m.mine && placeOrNull(m.placeId) != null).toList();
 
   /// Active monthly donors of a point (institution side).
   List<MonthlyGift> monthlyDonors(String placeId) => monthly.where((m) => m.placeId == placeId && !m.paused).toList();
@@ -376,127 +382,85 @@ class AppStore extends ChangeNotifier {
   MonthlyGift startMonthly(Place p, double amount, int day) {
     final m = MonthlyGift(id: nextId('m'), placeId: p.id, amount: amount, day: day, donor: name, mine: true);
     monthly.add(m);
-    notifyListeners();
-    // Demo: the first reminder arrives shortly instead of on the real day.
-    if (simulateReplies) _later(const Duration(seconds: 20), () => _remindMonthly(m));
+    _save(() => remote.insertMonthly(m));
     return m;
-  }
-
-  void _remindMonthly(MonthlyGift m) {
-    if (!monthly.contains(m) || m.paused || m.paidThisMonth) return;
-    final p = place(m.placeId);
-    _notice(
-      NoticeKind.monthlyReminder,
-      'Dia da sua doação mensal',
-      '${Fmt.money(m.amount)} para ${p.name}. Toque para fazer o Pix com o valor pronto.',
-      placeId: p.id,
-    );
-    notifyListeners();
   }
 
   void updateMonthly(MonthlyGift m, {required double amount, required int day}) {
     m
       ..amount = amount
       ..day = day;
-    notifyListeners();
+    _save(() => remote.updateMonthly(m));
   }
 
   void toggleMonthly(MonthlyGift m) {
     m.paused = !m.paused;
-    notifyListeners();
+    _save(() => remote.updateMonthly(m));
   }
 
   void cancelMonthly(MonthlyGift m) {
     monthly.remove(m);
-    notifyListeners();
+    _save(() => remote.deleteMonthly(m.id));
   }
 
   /// This month's payment, registered as a regular Pix donation. It counts
   /// towards the point's open Pix goal when there is one.
-  Donation payMonthly(MonthlyGift m, {required bool receipt}) {
+  Donation payMonthly(MonthlyGift m, {String? receiptFile}) {
     final p = place(m.placeId);
     final g = p.openGoals.where((g) => g.type == HelpType.pix).firstOrNull;
     m.markPaid();
-    if (g != null) return registerPix(p, g, m.amount, receipt: receipt);
     final d = Donation(
       id: nextId('d'),
       placeId: p.id,
-      goalId: '',
+      goalId: g?.id ?? '',
       type: HelpType.pix,
       amount: m.amount,
       date: DateTime.now(),
       donor: name,
       mine: true,
-      receipt: receipt,
+      receipt: receiptFile != null,
     );
     donations.add(d);
-    notifyListeners();
-    if (simulateReplies && p.id != myPointId) {
-      _later(const Duration(seconds: 25), () {
-        if (d.status == DonationStatus.waiting) confirm(d);
-      });
-    }
+    _save(() => remote.insertDonation(d, monthlyGiftId: m.id, receiptFile: receiptFile));
     return d;
   }
 
   // ── Institution: donations ────────────────────────────────
   void confirm(Donation d) {
-    final p = place(d.placeId);
-    final g = goal(p, d.goalId);
+    _confirmHere(d);
+    _save(() => remote.confirmDonation(d.id));
+  }
+
+  /// What the database does on confirm (fase 5), shown ahead of time.
+  void _confirmHere(Donation d) {
     d.status = DonationStatus.confirmed;
     d.confirmedAt = DateTime.now();
-    if (g != null) {
-      g.current += d.amount;
-      g.helpers++;
-      if (g.current >= g.target && g.status == GoalStatus.open) {
-        g.status = GoalStatus.done;
-        g.doneAt = DateTime.now();
-        if (donations.any((x) => x.goalId == g.id && x.mine && x.status == DonationStatus.confirmed)) {
-          _notice(
-            NoticeKind.goalDone,
-            'A meta de ${p.name} foi concluída',
-            '${g.quantity} arrecadados. Obrigado por fazer parte.',
-            placeId: p.id,
-          );
-        }
-      }
+    final g = goal(place(d.placeId), d.goalId);
+    if (g == null) return;
+    g.current += d.amount;
+    g.helpers++;
+    if (g.current >= g.target && g.status == GoalStatus.open) {
+      g.status = GoalStatus.done;
+      g.doneAt = DateTime.now();
     }
-    if (d.mine && notifyConfirm) {
-      _notice(
-        NoticeKind.confirmed,
-        'Sua doação foi confirmada',
-        'A ${p.name} confirmou o recebimento de ${_what(d, g)}.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
   }
 
   void markNotFound(Donation d) {
-    final p = place(d.placeId);
     d.status = DonationStatus.notFound;
-    if (d.mine) {
-      _notice(
-        NoticeKind.notFound,
-        'A ${p.name} não encontrou sua doação',
-        'Confira o comprovante em Minhas doações.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
+    _save(() => remote.markNotFound(d.id));
   }
 
   /// "Salvar presença": participants count for the goal and can rate.
   void savePresence(Goal g, Map<String, bool> attended) {
     for (final e in attended.entries) {
       final d = donations.firstWhere((x) => x.id == e.key);
-      if (e.value) {
-        confirm(d);
-      } else {
-        d.status = DonationStatus.absent;
-      }
+      e.value ? _confirmHere(d) : d.status = DonationStatus.absent;
     }
-    notifyListeners();
+    _save(() async {
+      for (final e in attended.entries) {
+        await (e.value ? remote.confirmDonation(e.key) : remote.markAbsent(e.key));
+      }
+    });
   }
 
   void cancelAction(Goal g) {
@@ -505,81 +469,32 @@ class AppStore extends ChangeNotifier {
     for (final d in donations.where((d) => d.goalId == g.id && d.status == DonationStatus.enrolled)) {
       d.status = DonationStatus.cancelled;
     }
-    notifyListeners();
+    _save(() => remote.cancelAction(g.id));
   }
 
   // ── Institution: goals ────────────────────────────────────
   void addGoal(Place p, Goal g) {
     p.goals.add(g);
-    if (g.published) _simulateDonor(p, g);
-    notifyListeners();
+    _save(() => remote.insertGoal(p.id, g));
   }
 
   void closeGoal(Goal g) {
     g.status = GoalStatus.closed;
     g.doneAt = DateTime.now();
-    notifyListeners();
+    _save(() => remote.closeGoal(g.id));
   }
 
   void extendGoal(Goal g, DateTime deadline) {
     g.deadline = deadline;
     g.status = GoalStatus.open;
     g.doneAt = null;
-    notifyListeners();
+    _save(() => remote.extendGoal(g.id, deadline));
   }
 
-  /// Someone near the new point registers a donation a few seconds after a
-  /// goal goes live, so the institution side of the demo has work to do.
-  void _simulateDonor(Place p, Goal g) {
-    if (!simulateReplies) return;
-    _later(const Duration(seconds: 15), () {
-      if (g.status != GoalStatus.open || !p.onMap) return;
-      final d = switch (g.type) {
-        HelpType.pix => Donation(
-          id: nextId('d'),
-          placeId: p.id,
-          goalId: g.id,
-          type: HelpType.pix,
-          amount: 50,
-          date: DateTime.now(),
-          donor: 'Mariana',
-          receipt: true,
-        ),
-        HelpType.itens => Donation(
-          id: nextId('d'),
-          placeId: p.id,
-          goalId: g.id,
-          type: HelpType.itens,
-          amount: (g.target / 8).ceilToDouble(),
-          date: DateTime.now(),
-          donor: 'Carlos',
-          when: DateTime.now().add(const Duration(days: 2)),
-          status: DonationStatus.itemsAgreed,
-        ),
-        HelpType.voluntariado => Donation(
-          id: nextId('d'),
-          placeId: p.id,
-          goalId: g.id,
-          type: HelpType.voluntariado,
-          amount: 1,
-          date: DateTime.now(),
-          donor: 'Ana',
-          when: g.action?.day,
-          status: DonationStatus.enrolled,
-        ),
-      };
-      if (g.type == HelpType.voluntariado) g.enrolled++;
-      donations.add(d);
-      if (g.type != HelpType.voluntariado) {
-        _notice(
-          NoticeKind.newDonation,
-          'Nova doação para confirmar',
-          '${d.donor} registrou ${_what(d, g)}.',
-          placeId: p.id,
-        );
-      }
-      notifyListeners();
-    });
+  /// The institution saw the "Meta concluída" card.
+  void markGoalSeen(Goal g) {
+    g.seenDone = true;
+    _save(() => remote.markGoalSeen(g.id));
   }
 
   // ── Institution: signup and edits ─────────────────────────
@@ -587,8 +502,13 @@ class AppStore extends ChangeNotifier {
 
   Place submitDraft() {
     final d = draft!;
+    final existing = myPoint;
+    // A point sent back for adjustment is fixed in place; after a refusal
+    // or removal the person starts a new one.
+    final fixing =
+        existing != null && (existing.status == PlaceStatus.adjust || existing.status == PlaceStatus.draft);
     final p = Place(
-      id: nextId('p'),
+      id: fixing ? existing.id : nextId('p'),
       name: d.name.trim(),
       point: d.point ?? center,
       kind: PlaceKind.fromType(d.type),
@@ -602,7 +522,7 @@ class AppStore extends ChangeNotifier {
       hours: d.hours.trim(),
       receiveDays: Place.daysFromText(d.hours),
       about: d.about.trim(),
-      causes: {...onboarding.selectedCauses.take(2)},
+      causes: fixing ? existing.causes : {...onboarding.selectedCauses.take(2)},
       cnpj: d.hasCnpj == true ? d.cnpj : null,
       legalName: d.legalName,
       cnpjStatus: d.cnpjStatus.isEmpty ? 'ativa' : d.cnpjStatus,
@@ -611,37 +531,28 @@ class AppStore extends ChangeNotifier {
       pixKeyType: d.accepts.contains(HelpType.pix) ? d.pixKeyType : null,
       pixKey: d.accepts.contains(HelpType.pix) ? d.pixKey.trim() : null,
       payee: d.accepts.contains(HelpType.pix) ? d.payee.trim() : null,
-      status: d.hasCnpj == false ? PlaceStatus.awaitingIndication : PlaceStatus.review,
+      // Points without CNPJ also go straight to the team, which checks
+      // the indication (product decision).
+      status: PlaceStatus.review,
       responsible: d.responsible.trim(),
       phone: d.phone,
       photo: d.photo,
     );
-    final existing = myPoint;
-    if (existing != null) {
+    if (fixing) {
+      p.goals.addAll(existing.goals);
       places.remove(existing);
-      queue.removeWhere((s) => s.place.id == existing.id);
     }
     places.add(p);
     myPointId = p.id;
     approvalSeen = false;
     draft = null;
-    if (p.status == PlaceStatus.awaitingIndication) {
-      // The indicating institution accepts after a while in the demo.
-      _later(const Duration(seconds: 20), () {
-        if (p.status != PlaceStatus.awaitingIndication) return;
-        p.status = PlaceStatus.review;
-        _enqueue(p, existing == null ? SubmissionKind.novo : SubmissionKind.correcao);
-        notifyListeners();
-      });
-    } else {
-      _enqueue(p, existing == null ? SubmissionKind.novo : SubmissionKind.correcao);
-    }
-    notifyListeners();
+    final indicatedById = d.hasCnpj == false
+        ? verifiedPlaces.where((x) => x.name == d.indicatedBy).firstOrNull?.id
+        : null;
+    _save(
+      () => remote.savePlace(p, isNew: !fixing, indicatedById: indicatedById, cnpjUnchecked: d.cnpjUnchecked),
+    );
     return p;
-  }
-
-  void _enqueue(Place p, SubmissionKind kind, [Map<String, String> changes = const {}]) {
-    queue.insert(0, Submission(id: nextId('s'), place: p, kind: kind, sentAt: DateTime.now(), changes: changes));
   }
 
   /// Reopens the signup with the data already sent ("Corrigir cadastro").
@@ -678,19 +589,20 @@ class AppStore extends ChangeNotifier {
 
   void renewReview(Place p) {
     p.lastReviewed = DateTime.now();
-    notifyListeners();
+    _save(() => remote.renewReview(p.id));
   }
+
+  /// Name, "sobre", what it distributes and hours: saved right away.
+  void savePlaceInfo(Place p) => _save(() => remote.editPlace(p));
 
   /// Address, photo or responsible: the point stays as it is until approved.
   void requestChange(Place p, Map<String, String> changes) {
-    queue.removeWhere((s) => s.place.id == p.id && s.kind == SubmissionKind.mudanca);
-    _enqueue(p, SubmissionKind.mudanca, changes);
-    notifyListeners();
+    _save(() => remote.requestChange(p, changes));
   }
 
   void changePixKey(Place p, String type, String key, String payee) {
     p.pixPaused = true;
-    requestChange(p, {'Chave Pix': '$type: $key', 'Favorecido': payee});
+    _save(() => remote.changePixKey(p.id, type, key, payee));
   }
 
   // ── Team ──────────────────────────────────────────────────
@@ -705,284 +617,48 @@ class AppStore extends ChangeNotifier {
   }
 
   void approve(Submission s) {
-    final p = s.place;
     queue.remove(s);
-    if (s.kind == SubmissionKind.mudanca) {
-      _applyChanges(p, s.changes);
-      p.pixPaused = false;
-      p.lastReviewed = DateTime.now();
-    } else {
-      p.status = PlaceStatus.active;
-      p.verifiedAt = DateTime.now();
-      p.lastReviewed = DateTime.now();
-      if (!places.contains(p)) places.add(p);
-      for (final g in p.goals) {
-        if (!g.published) {
-          g.published = true;
-          _simulateDonor(p, g);
-        }
-      }
+    if (s.kind != SubmissionKind.mudanca) {
+      s.place
+        ..status = PlaceStatus.active
+        ..verifiedAt ??= DateTime.now();
     }
-    if (p.id == myPointId && s.kind != SubmissionKind.mudanca && simulateReplies) {
-      _later(const Duration(seconds: 30), () {
-        if (monthly.any((m) => m.placeId == p.id)) return;
-        monthly.add(MonthlyGift(id: nextId('m'), placeId: p.id, amount: 30, day: 10, donor: 'Marina S.'));
-        _notice(
-          NoticeKind.newDonation,
-          'Nova doação mensal',
-          'Marina S. vai doar ${Fmt.money(30)} todo mês para ${p.name}.',
-          placeId: p.id,
-        );
-        notifyListeners();
-      });
-    }
-    if (p.id == myPointId) {
-      _notice(
-        NoticeKind.approved,
-        '${p.name} está no mapa',
-        'Seu ponto foi verificado. Já dá para criar metas.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
-  }
-
-  void _applyChanges(Place p, Map<String, String> c) {
-    final key = c['Chave Pix'];
-    if (key != null) {
-      final i = key.indexOf(': ');
-      p.pixKeyType = key.substring(0, i);
-      p.pixKey = key.substring(i + 2);
-      p.payee = c['Favorecido'] ?? p.payee;
-    }
-    if (c['Responsável'] != null) p.responsible = c['Responsável']!;
-    if (c['Endereço'] != null) {
-      final parts = c['Endereço']!.split(' · ');
-      p.street = parts.first.split(', ').first;
-      p.number = parts.first.split(', ').skip(1).join(', ');
-      if (parts.length > 1) p.neighborhood = parts[1];
-    }
-    if (c['Foto'] != null) p.photo = c['Foto'];
+    _save(() => remote.approve(s.id));
   }
 
   void askAdjust(Submission s, List<String> reasons, String message) {
-    final p = s.place;
     queue.remove(s);
-    p.status = PlaceStatus.adjust;
-    p.statusReason = reasons.map((r) => r[0].toLowerCase() + r.substring(1)).join('; ');
-    p.statusMessage = message.trim();
-    if (p.id == myPointId) {
-      _notice(
-        NoticeKind.adjust,
-        'Seu cadastro precisa de um ajuste',
-        'Motivo: ${p.statusReason}. Toque para corrigir.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
+    final text = reasons.map((r) => r[0].toLowerCase() + r.substring(1)).join('; ');
+    if (s.kind != SubmissionKind.mudanca) s.place.status = PlaceStatus.adjust;
+    _save(() => remote.askAdjust(s.id, text, message.trim()));
   }
 
   void refuse(Submission s, String reason) {
-    final p = s.place;
     queue.remove(s);
-    p.status = PlaceStatus.refused;
-    p.statusReason = reason.trim();
-    if (p.id == myPointId) {
-      _notice(NoticeKind.refused, 'Seu cadastro não foi aprovado', 'Motivo: ${p.statusReason}.', placeId: p.id);
-    }
-    notifyListeners();
+    if (s.kind != SubmissionKind.mudanca) s.place.status = PlaceStatus.refused;
+    _save(() => remote.refuse(s.id, reason.trim()));
   }
 
   void keepOnMap(String placeId) {
     reports.removeWhere((r) => r.placeId == placeId);
-    notifyListeners();
+    _save(() => remote.keepOnMap(placeId));
   }
 
   void pause(String placeId, String reason) {
-    final p = place(placeId);
-    p.status = PlaceStatus.paused;
-    p.statusReason = reason.trim();
+    place(placeId).status = PlaceStatus.paused;
     reports.removeWhere((r) => r.placeId == placeId);
-    if (p.id == myPointId) {
-      _notice(
-        NoticeKind.paused,
-        'Seu ponto foi pausado',
-        'Recebemos uma denúncia e estamos analisando. Motivo: ${p.statusReason}.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
+    _save(() => remote.pausePlace(placeId, reason.trim()));
   }
 
   void remove(String placeId, String reason) {
-    final p = place(placeId);
-    p.status = PlaceStatus.removed;
-    p.statusReason = reason.trim();
-    for (final g in p.goals.where((g) => g.status == GoalStatus.open)) {
-      g.status = GoalStatus.closed;
-    }
+    place(placeId).status = PlaceStatus.removed;
     reports.removeWhere((r) => r.placeId == placeId);
-    notifyListeners();
+    _save(() => remote.removePlace(placeId, reason.trim()));
   }
 
   void reactivate(String placeId) {
-    final p = place(placeId);
-    p.status = PlaceStatus.active;
-    p.statusReason = null;
-    if (p.id == myPointId) {
-      _notice(
-        NoticeKind.reactivated,
-        '${p.name} está de volta no mapa',
-        'A análise terminou. Suas metas voltaram a aparecer.',
-        placeId: p.id,
-      );
-    }
-    notifyListeners();
-  }
-
-  // ── Dev shortcut: an approved point with work to do ───────
-  void seedDemoInstitution() {
-    init();
-    final p = Place(
-      id: 'meu-ponto',
-      name: 'Cozinha Comunitária Vila Nova',
-      point: LatLng(center.latitude - .006, center.longitude + .012),
-      kind: PlaceKind.care,
-      typeLabel: 'Associação',
-      neighborhood: 'Vila Nova',
-      street: 'Rua Bahia',
-      number: '512',
-      hours: 'segunda a sexta, das 8h às 17h',
-      receiveDays: {1, 2, 3, 4, 5},
-      about: 'Servimos almoço para 60 famílias do bairro, de segunda a sexta.',
-      causes: {'Alimentos'},
-      verifiedAt: DateTime.now().subtract(const Duration(days: 30)),
-      cnpj: '22.333.444/0001-55',
-      legalName: 'Associação Cozinha Comunitária Vila Nova',
-      accepts: {HelpType.pix, HelpType.itens, HelpType.voluntariado},
-      pixKeyType: 'CNPJ',
-      pixKey: '22.333.444/0001-55',
-      payee: 'Associação Cozinha Comunitária Vila Nova',
-      responsible: fullName.isEmpty ? 'Enzo Silva' : fullName,
-      phone: '(17) 99999-1234',
-      lastReviewed: DateTime.now().subtract(const Duration(days: 40)),
-      goals: [
-        Goal(
-          id: 'm1',
-          type: HelpType.itens,
-          target: 60,
-          current: 34,
-          item: 'feijão',
-          unit: 'kg',
-          deadline: DateTime.now().add(const Duration(days: 5)),
-          reason: 'o número de famílias atendidas subiu de 45 para 60.',
-          cause: 'Alimentos',
-          helpers: 11,
-        ),
-        Goal(
-          id: 'm2',
-          type: HelpType.pix,
-          target: 800,
-          current: 350,
-          deadline: DateTime.now().add(const Duration(days: 9)),
-          reason: 'trocar o botijão e a mangueira do fogão industrial.',
-          cause: 'Alimentos',
-          helpers: 9,
-        ),
-        Goal(
-          id: 'm3',
-          type: HelpType.voluntariado,
-          target: 6,
-          enrolled: 2,
-          deadline: DateTime.now().add(const Duration(days: 3)),
-          reason: 'a entrega de cestas dobrou neste mês.',
-          cause: 'Alimentos',
-          action: VolunteerAction(
-            name: 'Separar doações',
-            task: 'Separar e organizar os alimentos que chegaram na semana.',
-            day: DateTime.now().add(const Duration(days: 3)),
-            start: 9 * 60,
-            end: 12 * 60,
-          ),
-        ),
-        Goal(
-          id: 'm4',
-          type: HelpType.itens,
-          target: 40,
-          current: 26,
-          item: 'óleo',
-          unit: 'litros',
-          deadline: DateTime.now().subtract(const Duration(days: 1)),
-          reason: 'o estoque de óleo acabou depois da festa junina.',
-          cause: 'Alimentos',
-          status: GoalStatus.expired,
-          helpers: 8,
-        ),
-      ],
-    );
-    places.add(p);
-    myPointId = p.id;
-    approvalSeen = true;
-    monthly.addAll([
-      MonthlyGift(id: nextId('m'), placeId: p.id, amount: 30, day: 10, donor: 'Marina S.'),
-      MonthlyGift(id: nextId('m'), placeId: p.id, amount: 50, day: 5, donor: 'Paulo R.'),
-    ]);
-    DateTime ago(int h) => DateTime.now().subtract(Duration(hours: h));
-    donations.addAll([
-      Donation(
-        id: nextId('d'),
-        placeId: p.id,
-        goalId: 'm2',
-        type: HelpType.pix,
-        amount: 80,
-        date: ago(80),
-        donor: 'Beatriz',
-        receipt: true,
-      ),
-      Donation(
-        id: nextId('d'),
-        placeId: p.id,
-        goalId: 'm2',
-        type: HelpType.pix,
-        amount: 25,
-        date: ago(5),
-        donor: 'Rafael',
-      ),
-      Donation(
-        id: nextId('d'),
-        placeId: p.id,
-        goalId: 'm1',
-        type: HelpType.itens,
-        amount: 5,
-        date: ago(20),
-        donor: 'Luíza',
-        when: DateTime.now().add(const Duration(days: 1)),
-        status: DonationStatus.itemsAgreed,
-      ),
-      Donation(
-        id: nextId('d'),
-        placeId: p.id,
-        goalId: 'm2',
-        type: HelpType.pix,
-        amount: 100,
-        date: ago(48),
-        donor: 'João',
-        status: DonationStatus.confirmed,
-        confirmedAt: ago(40),
-      ),
-      for (final n in ['Ana', 'Carlos'])
-        Donation(
-          id: nextId('d'),
-          placeId: p.id,
-          goalId: 'm3',
-          type: HelpType.voluntariado,
-          amount: 1,
-          date: ago(30),
-          donor: n,
-          when: p.goals[2].action!.day,
-          status: DonationStatus.enrolled,
-        ),
-    ]);
+    place(placeId).status = PlaceStatus.active;
+    _save(() => remote.reactivatePlace(placeId));
   }
 }
 

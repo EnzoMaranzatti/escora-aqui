@@ -198,16 +198,12 @@ class MonthlyPayScreen extends StatefulWidget {
 }
 
 class _MonthlyPayScreenState extends State<MonthlyPayScreen> {
-  bool _loading = false;
 
   MonthlyGift? get _gift => store.monthly.where((m) => m.id == widget.giftId).firstOrNull;
 
   Future<void> _paid(MonthlyGift m) async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
     final p = store.place(m.placeId);
-    store.payMonthly(m, receipt: false);
+    store.payMonthly(m);
     context.push(RegisteredScreen.pix(place: p, amount: m.amount));
   }
 
@@ -238,7 +234,6 @@ class _MonthlyPayScreenState extends State<MonthlyPayScreen> {
       onPrimary: done ? () => Navigator.of(context).pop() : () => copyPixKey(context, key),
       secondary: done ? null : 'Já fiz o Pix',
       onSecondary: done ? null : () => _paid(m),
-      loading: _loading,
       children: [
         Container(
           padding: const EdgeInsets.all(16),

@@ -129,7 +129,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
     if (!mounted) return;
     HapticFeedback.mediumImpact();
     Toast.show(context, 'Senha nova salva.');
-    context.replaceAll(const DonorShell(returning: true));
+    context.replaceAll(const DonorShell());
   }
 
   Future<void> _close() async {

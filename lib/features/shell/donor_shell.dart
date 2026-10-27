@@ -21,10 +21,7 @@ void goToTab(BuildContext context, int tab) {
 /// Main screens of the donor: Mapa · Doações · Avisos · Perfil. The bar
 /// hides inside task flows (they are pushed above the shell).
 class DonorShell extends StatefulWidget {
-  const DonorShell({super.key, this.returning = false});
-
-  /// Logged back in: comes with history (a new account starts empty).
-  final bool returning;
+  const DonorShell({super.key});
 
   @override
   State<DonorShell> createState() => _DonorShellState();
@@ -37,7 +34,7 @@ class _DonorShellState extends State<DonorShell> {
   @override
   void initState() {
     super.initState();
-    store.init(returning: widget.returning);
+    store.init();
     donorTab.addListener(_onTab);
     store.addListener(_onStore);
   }
