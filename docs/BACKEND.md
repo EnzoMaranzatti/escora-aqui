@@ -65,7 +65,7 @@ Os campos completos estão em `lib/data/models.dart`.
 
 | Quem | Métodos no `AppStore` |
 | --- | --- |
-| Conta | `updateProfile`, criação de conta e login (hoje em `signup/create_account_screen.dart` e `auth/login_screen.dart`, só simulados) |
+| Conta | **Pronto** em `lib/data/auth.dart`: `criarConta`, `entrar`, `entrarComGoogle`, `restaurarSessao`, `carregarPerfil`, `salvarPreferencias`, `salvarDados`, `pedirLinkDeSenha`, `ouvirLinkDeSenha`, `salvarSenhaNova`, `sair` |
 | Doador | `follow`, `unfollow`, `registerPix`, `registerItems`, `enroll`, `cancelEnrollment`, `rate`, `report`, `markRead`, `markAllRead` |
 | Doação mensal | `startMonthly`, `updateMonthly`, `toggleMonthly`, `cancelMonthly`, `payMonthly` |
 | Instituição | `startDraft`, `submitDraft`, `reopenDraft` (cadastro em 5 passos), `confirm`, `markNotFound`, `savePresence`, `cancelAction`, `addGoal`, `closeGoal`, `extendGoal`, `renewReview`, `requestChange`, `changePixKey` |
@@ -87,7 +87,7 @@ O servidor precisa ser a fonte da verdade delas:
 
 | Hoje | Precisa |
 | --- | --- |
-| Criar conta, login e "Continuar com Google" sempre dão certo | Autenticação real (e-mail/senha + Google) |
+| ~~Criar conta, login e "Continuar com Google" sempre dão certo~~ | **Feito** com Supabase Auth (e-mail/senha + Google no iOS + link no e-mail para senha nova). Falta o Google no Android |
 | Código SMS do celular do responsável aparece num toast | Verificação por SMS (ou trocar por e-mail) |
 | `simulateReplies`: timers fingem a instituição confirmando Pix (25 s), um doador se inscrevendo (15 s), lembrete mensal (20 s) e doador mensal novo (30 s) | Remover. Isso vem de outros usuários e de jobs agendados |
 | Avisos só dentro do app (`notices`) | Push (APNs/FCM) + job diário para lembretes (voluntariado na véspera, doação mensal no dia) |

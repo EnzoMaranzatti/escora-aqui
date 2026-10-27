@@ -10,6 +10,7 @@ import '../../core/widgets/buttons.dart';
 import '../../core/widgets/kit.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
+import '../../data/auth.dart';
 import '../../data/store.dart';
 import '../institution/institution_shell.dart';
 import '../institution/register/register_flow.dart';
@@ -33,6 +34,7 @@ class ProfileScreen extends StatelessWidget {
       onboarding.setPlace(city: r.city, uf: r.uf, position: r.point, fromGps: false);
       store.mapCenter = r.point;
       store.touch();
+      salvarPreferencias();
     } else if (r is UseMyLocation) {
       try {
         var perm = await Geolocator.checkPermission();
@@ -48,6 +50,7 @@ class ProfileScreen extends StatelessWidget {
         onboarding.setPlace(city: city, uf: uf, position: p, fromGps: true);
         store.mapCenter = p;
         store.touch();
+        salvarPreferencias();
       } catch (_) {}
     }
   }
@@ -65,6 +68,8 @@ class ProfileScreen extends StatelessWidget {
     );
     if (ok == null || !context.mounted) return;
     store.setMode(AppMode.donor);
+    await sair();
+    if (!context.mounted) return;
     context.replaceAll(const SplashScreen(startAtEnd: true));
   }
 
@@ -163,9 +168,12 @@ class ProfileScreen extends StatelessWidget {
                           title: 'Novas metas nas minhas causas',
                           trailing: AppSwitch(
                             value: store.notifyGoals,
-                            onChanged: (v) => store
-                              ..notifyGoals = v
-                              ..touch(),
+                            onChanged: (v) {
+                              store
+                                ..notifyGoals = v
+                                ..touch();
+                              salvarPreferencias();
+                            },
                           ),
                         ),
                         const Hairline(),
@@ -173,9 +181,12 @@ class ProfileScreen extends StatelessWidget {
                           title: 'Confirmação das minhas doações',
                           trailing: AppSwitch(
                             value: store.notifyConfirm,
-                            onChanged: (v) => store
-                              ..notifyConfirm = v
-                              ..touch(),
+                            onChanged: (v) {
+                              store
+                                ..notifyConfirm = v
+                                ..touch();
+                              salvarPreferencias();
+                            },
                           ),
                         ),
                         const Hairline(),
@@ -183,9 +194,12 @@ class ProfileScreen extends StatelessWidget {
                           title: 'Lembretes de voluntariado',
                           trailing: AppSwitch(
                             value: store.notifyVolunteer,
-                            onChanged: (v) => store
-                              ..notifyVolunteer = v
-                              ..touch(),
+                            onChanged: (v) {
+                              store
+                                ..notifyVolunteer = v
+                                ..touch();
+                              salvarPreferencias();
+                            },
                           ),
                         ),
                       ],
@@ -361,6 +375,7 @@ class _HelpTypesSheetState extends State<_HelpTypesSheet> {
             for (final t in HelpType.values) {
               if (_picked.contains(t) != onboarding.helpTypes.contains(t)) onboarding.toggleHelp(t);
             }
+            salvarPreferencias();
             Navigator.pop(context);
           },
         ),
@@ -410,6 +425,7 @@ class _CausesSheetState extends State<_CausesSheet> {
               ..clear()
               ..addAll(_picked);
             store.touch();
+            salvarPreferencias();
             Navigator.pop(context);
           },
         ),

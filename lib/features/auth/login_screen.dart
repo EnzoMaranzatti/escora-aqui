@@ -2,7 +2,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException;
 
+import '../../core/icons.dart';
 import '../../core/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -15,12 +17,14 @@ import '../../core/widgets/balanced_text.dart';
 import '../../core/widgets/reveal.dart';
 import '../../core/widgets/ripple_backdrop.dart';
 import '../../core/widgets/segment_progress.dart';
-import '../../data/store.dart';
+import '../../core/widgets/sheets.dart';
+import '../../data/auth.dart';
 import '../shell/donor_shell.dart';
 import '../intro/intro_screen.dart';
+import 'reset_password_screen.dart';
 
 /// "Já tenho um cadastro". Not designed in Figma yet; uses the same
-/// components. Authentication is simulated until there is a backend.
+/// components. Signs in with Supabase (lib/data/auth.dart).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -38,24 +42,43 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 1100));
+    try {
+      await entrar(email: _email.trim(), senha: _password);
+    } on AuthException catch (erro) {
+      _fail(mensagemDeErro(erro));
+      return;
+    } on PostgrestException {
+      _fail('Não deu para carregar seu perfil. Confira a internet e tente de novo.');
+      return;
+    }
     if (!mounted) return;
-    store
-      ..email = _email.trim()
-      ..name = store.name == 'você' ? _firstName(_email) : store.name;
     context.replaceAll(const DonorShell(returning: true));
   }
 
-  void _forgot() => ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: AppColors.cinza900,
-      content: Text(
-        'A recuperação de senha chega na próxima versão.',
-        style: AppType.body(color: AppColors.white, size: 14),
-      ),
-    ),
-  );
+  void _fail(String message) {
+    if (!mounted) return;
+    setState(() => _loading = false);
+    Toast.show(context, message, icon: PhosphorIconsFill.warningCircle);
+  }
+
+  Future<void> _google() async {
+    setState(() => _loading = true);
+    final bool signedIn;
+    try {
+      signedIn = await entrarComGoogle();
+    } on AuthException catch (erro) {
+      _fail(mensagemDeErro(erro));
+      return;
+    } on PostgrestException {
+      _fail('Não deu para carregar seu perfil. Confira a internet e tente de novo.');
+      return;
+    }
+    if (!mounted) return;
+    if (!signedIn) return setState(() => _loading = false);
+    context.replaceAll(const DonorShell(returning: true));
+  }
+
+  void _forgot() => context.push(ResetPasswordScreen(email: _email.trim()));
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _form() {
     return Column(
       children: [
-        GoogleButton(onTap: _submit),
+        GoogleButton(onTap: _google),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -211,10 +234,4 @@ class _CloverState extends State<_Clover> with SingleTickerProviderStateMixin {
       ),
     );
   }
-}
-
-/// "enzo.silva@…" → "Enzo".
-String _firstName(String email) {
-  final n = email.trim().split('@').first.split(RegExp(r'[._-]')).first;
-  return n.isEmpty ? 'você' : n[0].toUpperCase() + n.substring(1);
 }

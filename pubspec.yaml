@@ -7,6 +7,7 @@ environment:
   sdk: ^3.13.4
 
 dependencies:
+  crypto: ^3.0.8
   flutter:
     sdk: flutter
   flutter_localizations:
@@ -16,6 +17,7 @@ dependencies:
   geocoding: ^5.0.0
   geolocator: ^14.1.1
   google_fonts: ^9.0.0
+  google_sign_in: ^7.2.0
   http: ^1.6.0
   image_picker: ^1.2.4
   latlong2: ^0.10.1

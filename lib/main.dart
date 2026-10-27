@@ -5,11 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'core/icons.dart';
 import 'core/routes.dart';
+import 'core/widgets/sheets.dart';
 import 'core/theme/app_colors.dart';
 import 'dev/showreel.dart';
 import 'dev/tour.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/reset_password_screen.dart';
+import 'data/auth.dart';
 import 'data/store.dart';
 import 'features/institution/institution_shell.dart';
 import 'features/shell/donor_shell.dart';
@@ -30,17 +34,52 @@ Future<void> main() async {
     url: const String.fromEnvironment('SUPABASE_URL'),
     publishableKey: const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
   );
+  // Quem já entrou antes abre direto no mapa.
+  final loggedIn = await restaurarSessao();
+  // O link de "Esqueci minha senha" abre o app na tela de senha nova.
+  ouvirLinkDeSenha(abrirSenhaNova: _openNewPassword, linkInvalido: _invalidResetLink);
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-  runApp(const EscoraApp());
+  runApp(EscoraApp(loggedIn: loggedIn));
+}
+
+/// Lets things outside the widget tree (like the reset link) navigate.
+final _navigator = GlobalKey<NavigatorState>();
+
+void _openNewPassword() {
+  final nav = _navigator.currentState;
+  // The link can open the app before the first screen exists.
+  if (nav == null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openNewPassword());
+    return;
+  }
+  nav.push(EscoraRoute(const NewPasswordScreen()));
+}
+
+void _invalidResetLink() {
+  final nav = _navigator.currentState;
+  if (nav == null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _invalidResetLink());
+    return;
+  }
+  Toast.show(
+    nav.overlay!.context,
+    'Esse link não vale mais. Peça um novo em "Esqueci minha senha".',
+    icon: PhosphorIconsFill.warningCircle,
+    duration: const Duration(seconds: 5),
+  );
 }
 
 class EscoraApp extends StatelessWidget {
-  const EscoraApp({super.key});
+  const EscoraApp({super.key, this.loggedIn = false});
+
+  /// There is a saved Supabase session and the profile loaded.
+  final bool loggedIn;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigator,
       title: 'Escora aqui',
       debugShowCheckedModeBanner: false,
       locale: const Locale('pt', 'BR'),
@@ -69,17 +108,18 @@ class EscoraApp extends StatelessWidget {
       ),
       // A route generator is what makes MaterialApp create its Navigator.
       onGenerateRoute: (_) => EscoraRoute(const SplashScreen()),
-      onGenerateInitialRoutes: (_) => [for (final page in _startStack()) EscoraRoute(page)],
+      onGenerateInitialRoutes: (_) => [for (final page in _startStack(loggedIn)) EscoraRoute(page)],
     );
   }
 }
 
 /// Dev shortcut: `flutter run --dart-define=START=causes` opens a screen
-/// directly. Empty (default) starts at the cover. The screens before it
-/// in the flow are stacked underneath, so "Voltar" still works.
-List<Widget> _startStack() {
+/// directly. Empty (default) starts at the cover, or at the map when the
+/// person is logged in. The screens before it in the flow are stacked
+/// underneath, so "Voltar" still works.
+List<Widget> _startStack(bool loggedIn) {
   const start = String.fromEnvironment('START');
-  if (start.isEmpty) return const [SplashScreen()];
+  if (start.isEmpty) return [loggedIn ? const DonorShell(returning: true) : const SplashScreen()];
   if (start == 'showreel') return const [ShowreelScreen()];
   if (start == 'tour') return const [TourScreen()];
 

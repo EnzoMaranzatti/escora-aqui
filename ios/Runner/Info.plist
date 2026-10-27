@@ -2,12 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Usamos suas fotos só quando você escolhe anexar um comprovante ou a foto do local.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Usamos a câmera só quando você escolhe fotografar o comprovante ou o local.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Usamos sua localização só para mostrar os pontos de apoio mais perto de você.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -28,10 +22,39 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.256374281446-sqgupbprsbqojm0mmmjke8o43geqerlb</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>senha-nova</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>escoraaqui</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Usamos a câmera só quando você escolhe fotografar o comprovante ou o local.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Usamos sua localização só para mostrar os pontos de apoio mais perto de você.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Usamos suas fotos só quando você escolhe anexar um comprovante ou a foto do local.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

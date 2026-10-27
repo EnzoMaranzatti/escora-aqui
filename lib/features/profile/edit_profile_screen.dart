@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException;
 
 import '../../core/format.dart';
 import '../../core/icons.dart';
@@ -13,6 +14,7 @@ import '../../core/widgets/kit.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
+import '../../data/auth.dart';
 import '../../data/store.dart';
 
 /// Round avatar: the picked photo, else the first letter of the name.
@@ -126,18 +128,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
     setState(() => _saving = true);
-    await Future.delayed(const Duration(milliseconds: 700));
+    final bool confirmEmail;
+    try {
+      confirmEmail = await salvarDados(
+        nomeCompleto: _name.trim(),
+        email: _email.trim(),
+        celular: _phone,
+        nascimento: _birthDate,
+      );
+    } on AuthException catch (erro) {
+      _fail(mensagemDeErro(erro));
+      return;
+    } on PostgrestException {
+      _fail('Não deu para salvar agora. Confira a internet e tente de novo.');
+      return;
+    }
     if (!mounted) return;
+    // The new e-mail only counts after the link is confirmed.
     store.updateProfile(
       fullName: _name.trim(),
-      email: _email.trim(),
+      email: confirmEmail ? store.email : _email.trim(),
       phone: _phone,
       birthDate: _birthDate,
       avatar: _avatar,
     );
     HapticFeedback.lightImpact();
-    Toast.show(context, 'Dados atualizados.');
+    Toast.show(
+      context,
+      confirmEmail
+          ? 'Dados atualizados. Enviamos um link para o novo e-mail: a troca vale depois que você confirmar.'
+          : 'Dados atualizados.',
+      duration: Duration(seconds: confirmEmail ? 6 : 3),
+    );
     Navigator.of(context).pop();
+  }
+
+  void _fail(String message) {
+    if (!mounted) return;
+    setState(() => _saving = false);
+    Toast.show(context, message, icon: PhosphorIconsFill.warningCircle);
   }
 
   @override

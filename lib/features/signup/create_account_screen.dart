@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException, PostgrestException;
 
+import '../../core/icons.dart';
+import '../../core/widgets/sheets.dart';
+import '../../data/auth.dart';
 import '../../core/assets.dart';
 import '../../core/routes.dart';
 import '../../core/theme/app_colors.dart';
@@ -14,7 +18,6 @@ import '../../core/widgets/segment_progress.dart';
 import '../../core/widgets/step_progress.dart';
 import '../../core/widgets/svg_icon.dart';
 import '../auth/login_screen.dart';
-import '../../data/store.dart';
 import '../institution/register/register_flow.dart';
 import '../shell/donor_shell.dart';
 import '../map/pins.dart';
@@ -24,8 +27,8 @@ import '../map/pins.dart';
 /// form is valid. On success a check pops in place of the form, then the
 /// app opens on the personalized map.
 ///
-/// There is no backend yet: account creation and Google sign-in are
-/// simulated.
+/// The account is created in Supabase (lib/data/auth.dart), with e-mail
+/// and password or with Google.
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({super.key, this.withGoogle = false, this.forInstitution = false});
 
@@ -62,25 +65,42 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   Future<void> _googleSignIn() async {
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 1200));
+    final bool signedIn;
+    try {
+      signedIn = await entrarComGoogle(cadastro: true);
+    } on AuthException catch (erro) {
+      _fail(mensagemDeErro(erro));
+      return;
+    } on PostgrestException {
+      _fail('Não deu para carregar seu perfil. Confira a internet e tente de novo.');
+      return;
+    }
     if (!mounted) return;
-    _finish(name: 'você');
+    // Closed the Google window: back to the form.
+    if (!signedIn) return setState(() => _loading = false);
+    _finish();
   }
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 1400));
+    try {
+      await criarConta(nome: _name.trim(), email: _email.trim(), senha: _password);
+    } on AuthException catch (erro) {
+      _fail(mensagemDeErro(erro));
+      return;
+    }
     if (!mounted) return;
-    _finish(name: _name.trim().split(' ').first);
+    _finish();
   }
 
-  void _finish({required String name}) {
-    onboarding.name = name;
-    store
-      ..name = name
-      ..fullName = _name.trim()
-      ..email = _email.trim();
+  void _fail(String message) {
+    if (!mounted) return;
+    setState(() => _loading = false);
+    Toast.show(context, message, icon: PhosphorIconsFill.warningCircle);
+  }
+
+  void _finish() {
     HapticFeedback.mediumImpact();
     setState(() {
       _loading = false;

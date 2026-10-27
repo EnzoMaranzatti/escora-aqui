@@ -3,6 +3,18 @@
 App Flutter (iOS e Android): mapa de instituições verificadas perto de você.
 Back-end no [Supabase](https://supabase.com) (plano gratuito).
 
+> [!WARNING]
+> **Por enquanto o app só é testado no iOS (simulador).** O código é o mesmo
+> para Android, mas nenhum computador do projeto tem o Android Studio, então
+> o app nunca foi compilado para Android. Faltam, no mínimo:
+>
+> - instalar o Android Studio (traz o Java e o emulador) e rodar `flutter run` num Android;
+> - **"Continuar com Google" no Android:** criar no Google Cloud (projeto
+>   `escora-aqui`) um cliente do tipo **Android**, com o pacote
+>   `com.escoraaqui.escora_aqui` e o SHA-1 da chave de debug
+>   (`keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`).
+>   O código já está pronto; sem esse cliente, o Google recusa o login no Android.
+
 ## Rodar o app
 
 ### 1. Primeira vez na máquina
@@ -17,9 +29,15 @@ fica fora do Git, então precisa ser criado em cada computador:
 ```json
 {
   "SUPABASE_URL": "https://snnkvhlsnkvolbmskmjv.supabase.co",
-  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Frs92xrJR7wUmwe6dPqOHA_DmGWLEA4"
+  "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_Frs92xrJR7wUmwe6dPqOHA_DmGWLEA4",
+  "GOOGLE_WEB_CLIENT_ID": "256374281446-fcvvdvbqvv3gkf78jbeohtn6nlqg3pam.apps.googleusercontent.com",
+  "GOOGLE_IOS_CLIENT_ID": "256374281446-sqgupbprsbqojm0mmmjke8o43geqerlb.apps.googleusercontent.com"
 }
 ```
+
+Os dois `GOOGLE_…_CLIENT_ID` são do "Continuar com Google" (projeto `escora-aqui`
+no Google Cloud). Também não são segredo; a chave secreta do Google fica só no
+painel do Supabase (Authentication → Sign In / Providers → Google).
 
 A chave pública (`sb_publishable_…`) pode ficar aqui: quem protege os dados são
 as permissões do banco (RLS). A chave secreta (`sb_secret_…`) e a senha do banco
@@ -126,6 +144,34 @@ Ele já foi rodado no banco do projeto. Se o `seed.sql` mudar e for rodado de
 novo, os pontos que já existem dão erro de id repetido: apague-os antes no
 painel (Table Editor).
 
+## Contas (Supabase Auth)
+
+O código fica em `lib/data/auth.dart`: criar conta, entrar (e-mail ou Google),
+esqueci a senha, abrir já logado, salvar o perfil e sair. As telas só chamam
+essas funções. O que fica no painel do Supabase (não está no Git):
+
+| Onde | Como deixar |
+| --- | --- |
+| Authentication → Sign In / Providers → **Email** | ligado; **Confirm email** desligado; senha mínima **8** |
+| Authentication → Sign In / Providers → **Google** | ligado; Client IDs = `GOOGLE_WEB_CLIENT_ID,GOOGLE_IOS_CLIENT_ID` (do `env.json`, nessa ordem); Client Secret = chave secreta do cliente Web; **Skip nonce checks** desligado |
+| Authentication → URL Configuration → **Redirect URLs** | `escoraaqui://senha-nova` (já está no `config.toml`; enviado com `supabase config push`) |
+
+**Esqueci minha senha** usa o e-mail padrão do Supabase, que manda um link (no
+plano gratuito o texto desse e-mail não pode ser mudado). O link passa pelo
+Supabase e volta para `escoraaqui://senha-nova`, que abre o app na tela "Crie
+uma senha nova". Esse endereço está registrado no `ios/Runner/Info.plist` e no
+`android/app/src/main/AndroidManifest.xml`. O link precisa ser aberto **no
+mesmo aparelho** em que a pessoa pediu.
+
+Para testar no simulador: peça o link no app, copie o link do e-mail no Mac e
+rode `xcrun simctl openurl booted "LINK_COPIADO"`.
+
+**Limite do e-mail gratuito:** o servidor de e-mail que vem com o Supabase só
+entrega para os e-mails da **equipe do projeto** (Organization → Team) e manda
+poucos e-mails por hora. Para mandar para qualquer pessoa, é preciso ligar um
+SMTP próprio em Authentication → Emails → SMTP Settings (há opções gratuitas,
+como o Resend ou o Brevo).
+
 ## Mapa (gratuito, sem chave)
 
 - **Dados:** [OpenFreeMap](https://openfreemap.org) (OpenStreetMap), tiles vetoriais sem limite de uso e sem cadastro.
@@ -155,18 +201,20 @@ docs/BACKEND.md  passagem para o back-end
 
 ## Andamento do back-end
 
-| Fase | O que é | Situação |
-| --- | --- | --- |
-| 1 · Fundação | tabelas, permissões, dados de teste, app ligado ao Supabase | pronta |
-| 2 · Contas | criar conta, login (e-mail e Google), perfil do onboarding | próxima |
-| 3 · Mapa e leitura | pontos por raio, perfil do ponto e metas vindos do banco | |
-| 4 · Doador | registrar doações, seguir, avaliar, denunciar, doação mensal | |
-| 5 · Instituição | cadastro, fotos, confirmar doações, metas, troca de chave Pix | |
-| 6 · Equipe | fila de validação, denúncias, pausar e remover pontos | |
-| 7 · Avisos | lembretes diários, avisos em tempo real, push | |
-| 8 · Produção | termos, LGPD, testes, backup | |
+| Fase                | O que é                                                         | Situação |
+| ------------------- | ---------------------------------------------------------------- | ---------- |
+| 1 · Fundação     | tabelas, permissões, dados de teste, app ligado ao Supabase     | pronta     |
+| 2 · Contas         | criar conta, login (e-mail e Google), perfil do onboarding       | pronta no iOS (Google no Android pendente) |
+| 3 · Mapa e leitura | pontos por raio, perfil do ponto e metas vindos do banco         |            |
+| 4 · Doador         | registrar doações, seguir, avaliar, denunciar, doação mensal |            |
+| 5 · Instituição  | cadastro, fotos, confirmar doações, metas, troca de chave Pix  |            |
+| 6 · Equipe         | fila de validação, denúncias, pausar e remover pontos         |            |
+| 7 · Avisos         | lembretes diários, avisos em tempo real, push                   |            |
+| 8 · Produção     | termos, LGPD, testes, backup                                     |            |
 
-O app já se conecta ao Supabase, mas as telas ainda usam os dados em memória
-(`lib/data/store.dart`), que somem ao fechar o app. Conta, login, SMS, avisos e
-respostas das instituições continuam simulados até as próximas fases. Detalhes
-em [`docs/BACKEND.md`](docs/BACKEND.md).
+Conta e login (e-mail e Google) já são de verdade (`lib/data/auth.dart`): o cadastro
+cria a conta no Supabase, as escolhas do onboarding e os dados do perfil ficam
+em `profiles`, e quem já entrou abre o app direto no mapa. O resto das telas
+ainda usa os dados em memória (`lib/data/store.dart`), que somem ao fechar o
+app. SMS, avisos e respostas das instituições continuam simulados até as
+próximas fases. Detalhes em [`docs/BACKEND.md`](docs/BACKEND.md).
