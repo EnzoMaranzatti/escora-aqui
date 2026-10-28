@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
+
 import '../../core/icons.dart';
 
 import '../../core/format.dart';
@@ -40,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   static bool _tipSeen = false;
   static bool _welcomed = false;
   static bool _listMode = false;
+  static bool _gpsClosed = false;
 
   final _map = MapController();
   late final _mover = MapMover(_map, this);
@@ -49,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Place? _selected;
   bool _banner = !_welcomed;
   bool _tip = !_tipSeen;
+  bool _emptyClosed = false;
   bool _slowLoad = false;
   bool _offline = false;
   bool _locating = false;
@@ -145,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _afterFilter() {
+    _emptyClosed = false;
     if (_selected != null && !_visible.contains(_selected)) _selected = null;
     store.touch();
   }
@@ -230,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           onAction: _checkConnection,
           elevated: true,
         )
-      else if (!onboarding.fromGps)
+      else if (!onboarding.fromGps && !_gpsClosed)
         NoticeBanner(
           key: const ValueKey('gps'),
           tone: Tone.info,
@@ -238,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           text: 'Sua localização está desligada. Mostrando pontos de ${onboarding.city ?? 'São José do Rio Preto'}.',
           action: _locating ? 'Ativando…' : 'Ativar localização',
           onAction: _locating ? null : _enableLocation,
+          onClose: () => setState(() => _gpsClosed = true),
           elevated: true,
         )
       else if (_banner)
@@ -414,7 +419,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
 
           // Empty map state.
-          if (!_listMode && noResults)
+          if (!_listMode && noResults && !_emptyClosed)
             Positioned(
               left: 24,
               right: 24,
@@ -424,7 +429,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: Reveal(
                   child: AppCard(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: _NoPoints(onClear: _filtered ? _clearFilters : null, onWiden: _widen),
+                    child: _NoPoints(
+                      onClear: _filtered ? _clearFilters : null,
+                      onWiden: _widen,
+                      onClose: () => setState(() => _emptyClosed = true),
+                    ),
                   ),
                 ),
               ),
@@ -652,22 +661,39 @@ class _Pill extends StatelessWidget {
 }
 
 class _NoPoints extends StatelessWidget {
-  const _NoPoints({required this.onClear, required this.onWiden});
+  const _NoPoints({required this.onClear, required this.onWiden, this.onClose});
 
   final VoidCallback? onClear;
   final VoidCallback onWiden;
 
+  /// Only on the map; in the list, the message stays in place of the list.
+  final VoidCallback? onClose;
+
   @override
   Widget build(BuildContext context) {
-    return EmptyState(
-      compact: true,
-      icon: PhosphorIconsRegular.funnelSimpleX,
-      title: 'Nenhum ponto com esses filtros perto de você.',
-      text: 'Tente tirar um filtro ou aumentar a distância.',
-      primary: onClear == null ? null : 'Limpar filtros',
-      onPrimary: onClear,
-      secondary: 'Aumentar a distância',
-      onSecondary: onWiden,
+    return Stack(
+      children: [
+        EmptyState(
+          compact: true,
+          icon: PhosphorIconsRegular.funnelSimpleX,
+          title: 'Nenhum ponto com esses filtros perto de você.',
+          text: 'Tente tirar um filtro ou aumentar a distância.',
+          primary: onClear == null ? null : 'Limpar filtros',
+          onPrimary: onClear,
+          secondary: 'Aumentar a distância',
+          onSecondary: onWiden,
+        ),
+        if (onClose != null)
+          Positioned(
+            top: 0,
+            right: -8,
+            child: IconButton(
+              tooltip: 'Fechar',
+              onPressed: onClose,
+              icon: const Icon(PhosphorIconsRegular.x, size: 18, color: AppColors.cinza600),
+            ),
+          ),
+      ],
     );
   }
 }

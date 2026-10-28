@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+
 import '../../core/icons.dart';
 
 import '../theme/app_colors.dart';
@@ -121,6 +122,7 @@ class NoticeBanner extends StatelessWidget {
     this.icon,
     this.title,
     this.elevated = false,
+    this.onClose,
   });
 
   final String text;
@@ -129,6 +131,9 @@ class NoticeBanner extends StatelessWidget {
   final String? action;
   final VoidCallback? onAction;
   final IconData? icon;
+
+  /// Shows an "x" on the top right that hides the banner.
+  final VoidCallback? onClose;
 
   /// Adds a shadow, for banners floating over the map.
   final bool elevated;
@@ -169,6 +174,18 @@ class NoticeBanner extends StatelessWidget {
               ],
             ),
           ),
+          if (onClose != null)
+            Semantics(
+              button: true,
+              label: 'Fechar',
+              child: Pressable(
+                onTap: onClose,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 8),
+                  child: Icon(PhosphorIconsRegular.x, size: 18, color: tone.fg),
+                ),
+              ),
+            ),
         ],
       ),
     );

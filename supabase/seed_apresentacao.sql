@@ -14,11 +14,11 @@
 -- é confirmada, e os avisos nascem sozinhos. No fim, os horários dos avisos
 -- são espalhados para não aparecer tudo como "agora".
 --
--- A conta dev.drenato@gmail.com ganha:
---   • Casa Exemplo (modo instituição): Pix e itens para confirmar, histórico
---     de confirmadas, uma "não encontrada" e avaliações;
---   • modo doador: doações em vários estados, uma inscrição em voluntariado,
---     uma doação mensal, pontos seguidos e avisos.
+-- Todas as contas que já existem quando o script roda ganham o mesmo lado de
+-- doador: doações em vários estados, uma inscrição em voluntariado, uma doação
+-- mensal, pontos seguidos e avisos. Contas criadas depois veem só o mapa.
+-- Só a dev.drenato@gmail.com tem a Casa Exemplo (modo instituição) e a equipe:
+-- Pix e itens para confirmar, histórico, uma "não encontrada" e avaliações.
 
 BEGIN;
 
@@ -35,6 +35,10 @@ $$;
 
 CREATE TEMP TABLE demo_dev ON COMMIT DROP AS
 SELECT id FROM auth.users WHERE email = 'dev.drenato@gmail.com';
+
+-- As contas reais (criadas antes das fictícias logo abaixo).
+CREATE TEMP TABLE demo_people ON COMMIT DROP AS
+SELECT p.id FROM public.profiles p;
 
 -- ── Contas fictícias ────────────────────────────────────────
 -- 301 a 310 doam; 311 a 316 são responsáveis pelos pontos novos.
@@ -156,11 +160,17 @@ INSERT INTO public.places (
 
 -- ── Pontos seguidos (antes das metas novas, para o aviso "abriu uma meta") ─
 
+INSERT INTO public.follows (user_id, place_id, created_at)
+SELECT p.id, f.place::uuid, f.at
+FROM demo_people p
+CROSS JOIN (VALUES
+    ('00000000-0000-4000-8000-000000000102', now() - interval '20 days'),
+    ('00000000-0000-4000-8000-000000000106', now() - interval '18 days'),
+    ('00000000-0000-4000-8000-000000000110', now() - interval '10 days'),
+    ('00000000-0000-4000-8000-000000000121', now() - interval '6 days')
+) AS f (place, at);
+
 INSERT INTO public.follows (user_id, place_id, created_at) VALUES
-    ((SELECT id FROM demo_dev), '00000000-0000-4000-8000-000000000102', now() - interval '20 days'),
-    ((SELECT id FROM demo_dev), '00000000-0000-4000-8000-000000000106', now() - interval '18 days'),
-    ((SELECT id FROM demo_dev), '00000000-0000-4000-8000-000000000110', now() - interval '10 days'),
-    ((SELECT id FROM demo_dev), '00000000-0000-4000-8000-000000000121', now() - interval '6 days'),
     ('00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000101', now() - interval '30 days'),
     ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000101', now() - interval '25 days'),
     ('00000000-0000-4000-8000-000000000305', '00000000-0000-4000-8000-000000000122', now() - interval '12 days');
@@ -174,7 +184,8 @@ INSERT INTO public.goals (
     ('00000000-0000-4000-8000-000000000221', '00000000-0000-4000-8000-000000000121',
      'itens', 40, 12, 5, 'cestas básicas', 'kits', current_date + 14,
      'o fim do ano aumenta a procura, e 15 famílias novas se cadastraram.', 'Alimentos', now() - interval '4 days'),
-    -- falta R$ 40: a doação da conta dev conclui esta meta
+    -- as doações das contas reais (R$ 40 cada) concluem esta meta; o current
+    -- é acertado logo abaixo, conforme o número de contas
     ('00000000-0000-4000-8000-000000000222', '00000000-0000-4000-8000-000000000121',
      'pix', 800, 760, 11, '', 'unidades', current_date + 5,
      'comprar um freezer usado para guardar as doações de carne.', 'Alimentos', now() - interval '5 days'),
@@ -230,6 +241,15 @@ INSERT INTO public.goals (
      current_date + 1 + (6 - extract(isodow FROM current_date + 1)::int + 7) % 7,
      15 * 60, 17 * 60, now() - interval '3 days');
 
+UPDATE public.goals
+SET current = greatest(0, 800 - 40 * (SELECT count(*) FROM demo_people))
+WHERE id = '00000000-0000-4000-8000-000000000222';
+
+-- Uma vaga no mutirão para cada conta real, além das 3 fictícias.
+UPDATE public.goals
+SET target = greatest(target, 5 + (SELECT count(*) FROM demo_people))
+WHERE id = '00000000-0000-4000-8000-000000000204';
+
 -- As metas do seed.sql já vinham com "current", mas ninguém tinha ajudado.
 UPDATE public.goals
 SET helpers = helpers + greatest(2, least(14, (current / CASE WHEN type = 'pix' THEN 90 ELSE 4 END)::int))
@@ -268,23 +288,33 @@ FROM (VALUES
     -- pontos novos
     ('00000000-0000-4000-8000-000000000531', '00000000-0000-4000-8000-000000000310', '00000000-0000-4000-8000-000000000124', '00000000-0000-4000-8000-000000000227', 'itens', 4, current_date - 2, now() - interval '4 days'),
     ('00000000-0000-4000-8000-000000000532', '00000000-0000-4000-8000-000000000305', '00000000-0000-4000-8000-000000000122', '00000000-0000-4000-8000-000000000223', 'itens', 6, current_date - 1, now() - interval '3 days'),
-    ('00000000-0000-4000-8000-000000000533', '00000000-0000-4000-8000-000000000307', '00000000-0000-4000-8000-000000000126', '00000000-0000-4000-8000-000000000231', 'pix', 70, NULL, now() - interval '6 days'),
-    -- conta dev, como doadora (donor NULL = dev)
-    ('00000000-0000-4000-8000-000000000541', NULL, '00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000203', 'pix', 50, NULL, now() - interval '11 days'),
-    ('00000000-0000-4000-8000-000000000542', NULL, '00000000-0000-4000-8000-000000000105', '00000000-0000-4000-8000-000000000207', 'itens', 2, current_date - 3, now() - interval '5 days'),
-    ('00000000-0000-4000-8000-000000000543', NULL, '00000000-0000-4000-8000-000000000121', '00000000-0000-4000-8000-000000000222', 'pix', 40, NULL, now() - interval '2 days'),
-    ('00000000-0000-4000-8000-000000000544', NULL, '00000000-0000-4000-8000-000000000106', '00000000-0000-4000-8000-000000000208', 'pix', 30, NULL, now() - interval '20 hours'),
-    ('00000000-0000-4000-8000-000000000545', NULL, '00000000-0000-4000-8000-000000000108', '00000000-0000-4000-8000-000000000210', 'itens', 2, current_date + 2, now() - interval '1 day')
+    ('00000000-0000-4000-8000-000000000533', '00000000-0000-4000-8000-000000000307', '00000000-0000-4000-8000-000000000126', '00000000-0000-4000-8000-000000000231', 'pix', 70, NULL, now() - interval '6 days')
 ) AS d (id, donor, place, goal, type, amount, day, at);
+
+-- O mesmo histórico de doador para cada conta real.
+INSERT INTO public.donations (donor_id, place_id, goal_id, type, amount, scheduled_for, created_at)
+SELECT p.id, d.place::uuid, d.goal::uuid, d.type::public.help_type, d.amount, d.day, d.at
+FROM demo_people p
+CROSS JOIN (VALUES
+    ('00000000-0000-4000-8000-000000000102', '00000000-0000-4000-8000-000000000203', 'pix', 50, NULL::date, now() - interval '11 days'),
+    ('00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000205', 'itens', 2, current_date - 3, now() - interval '5 days'),
+    ('00000000-0000-4000-8000-000000000121', '00000000-0000-4000-8000-000000000222', 'pix', 40, NULL, now() - interval '2 days'),
+    ('00000000-0000-4000-8000-000000000106', '00000000-0000-4000-8000-000000000208', 'pix', 30, NULL, now() - interval '20 hours'),
+    ('00000000-0000-4000-8000-000000000108', '00000000-0000-4000-8000-000000000210', 'itens', 2, current_date + 2, now() - interval '1 day')
+) AS d (place, goal, type, amount, day, at);
 
 -- Inscrições em voluntariado (o gatilho ocupa a vaga e põe o dia da ação).
 INSERT INTO public.donations (donor_id, place_id, goal_id, type, amount, created_at)
-SELECT coalesce(v.donor::uuid, (SELECT id FROM demo_dev)), v.place::uuid, v.goal::uuid, 'voluntariado', 1, v.at
+SELECT p.id, '00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000204',
+       'voluntariado', 1, now() - interval '2 days'
+FROM demo_people p;
+
+INSERT INTO public.donations (donor_id, place_id, goal_id, type, amount, created_at)
+SELECT v.donor::uuid, v.place::uuid, v.goal::uuid, 'voluntariado', 1, v.at
 FROM (VALUES
     ('00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000204', now() - interval '3 days'),
     ('00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000204', now() - interval '2 days'),
     ('00000000-0000-4000-8000-000000000309', '00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000204', now() - interval '1 day'),
-    (NULL,                                   '00000000-0000-4000-8000-000000000103', '00000000-0000-4000-8000-000000000204', now() - interval '2 days'),
     ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000104', '00000000-0000-4000-8000-000000000206', now() - interval '4 days'),
     ('00000000-0000-4000-8000-000000000310', '00000000-0000-4000-8000-000000000104', '00000000-0000-4000-8000-000000000206', now() - interval '1 day'),
     ('00000000-0000-4000-8000-000000000304', '00000000-0000-4000-8000-000000000111', '00000000-0000-4000-8000-000000000214', now() - interval '2 days'),
@@ -305,19 +335,26 @@ WHERE id IN (
     '00000000-0000-4000-8000-000000000518', '00000000-0000-4000-8000-000000000519',
     '00000000-0000-4000-8000-000000000520', '00000000-0000-4000-8000-000000000521',
     '00000000-0000-4000-8000-000000000531', '00000000-0000-4000-8000-000000000532',
-    '00000000-0000-4000-8000-000000000533', '00000000-0000-4000-8000-000000000541',
-    '00000000-0000-4000-8000-000000000542', '00000000-0000-4000-8000-000000000543'
+    '00000000-0000-4000-8000-000000000533'
 );
+
+-- As das contas reais: Pix da Santo Dumont, kits da Liberal e o freezer
+-- (a última confirmação conclui a meta e avisa todo mundo que ajudou).
+UPDATE public.donations
+SET status = 'confirmed', confirmed_at = created_at + interval '1 day'
+WHERE donor_id IN (SELECT id FROM demo_people)
+  AND goal_id IN ('00000000-0000-4000-8000-000000000203', '00000000-0000-4000-8000-000000000205',
+                  '00000000-0000-4000-8000-000000000222');
 
 -- A Casa Exemplo não achou este Pix no extrato.
 UPDATE public.donations SET status = 'not_found'
 WHERE id = '00000000-0000-4000-8000-000000000505';
 
--- ── Doação mensal da conta dev ──────────────────────────────
+-- ── Doação mensal de cada conta real ────────────────────────
 
-INSERT INTO public.monthly_gifts (donor_id, place_id, amount, day, since, created_at) VALUES
-    ((SELECT id FROM demo_dev), '00000000-0000-4000-8000-000000000106', 20, 10,
-     current_date - 75, now() - interval '75 days');
+INSERT INTO public.monthly_gifts (donor_id, place_id, amount, day, since, created_at)
+SELECT p.id, '00000000-0000-4000-8000-000000000106', 20, 10, current_date - 75, now() - interval '75 days'
+FROM demo_people p;
 
 -- ── Avaliações (só de doações confirmadas) ──────────────────
 
@@ -336,12 +373,18 @@ FROM (VALUES
     ('00000000-0000-4000-8000-000000000518', 5, 'A paróquia separa tudo por tamanho. Dá gosto de ajudar.'),
     ('00000000-0000-4000-8000-000000000520', 3, 'Ajudam muitos animais, mas o horário de entrega é curto.'),
     ('00000000-0000-4000-8000-000000000531', 5, 'Serviram café para mais de 50 pessoas no dia em que fui.'),
-    ('00000000-0000-4000-8000-000000000532', 5, 'As crianças são muito bem tratadas. Ambiente alegre.'),
-    ('00000000-0000-4000-8000-000000000541', 5, 'Transparente: a meta mostra exatamente para onde vai o dinheiro.')
+    ('00000000-0000-4000-8000-000000000532', 5, 'As crianças são muito bem tratadas. Ambiente alegre.')
 ) AS r (donation, stars, comment)
 JOIN public.donations d ON d.id = r.donation::uuid;
 
--- ── Avisos da conta dev ─────────────────────────────────────
+-- A conta dev também avaliou (uma só, para não repetir o comentário no perfil).
+INSERT INTO public.reviews (donation_id, place_id, author_id, stars, comment, created_at)
+SELECT d.id, d.place_id, d.donor_id, 5,
+       'Transparente: a meta mostra exatamente para onde vai o dinheiro.', d.confirmed_at + interval '3 hours'
+FROM public.donations d
+WHERE d.donor_id = (SELECT id FROM demo_dev) AND d.goal_id = '00000000-0000-4000-8000-000000000203';
+
+-- ── Avisos ──────────────────────────────────────────────────
 -- Os gatilhos avisaram a conta dev de toda doação nos 14 pontos do seed (ela
 -- é dona de todos). No app, o ponto dela é só a Casa Exemplo.
 DELETE FROM public.notices
@@ -359,29 +402,33 @@ WHERE n.user_id = (SELECT id FROM demo_dev) AND n.kind = 'new_donation' AND n.cr
 UPDATE public.notices n
 SET created_at = d.confirmed_at, read = d.confirmed_at < now() - interval '2 days'
 FROM public.donations d
-WHERE n.user_id = (SELECT id FROM demo_dev) AND n.kind IN ('confirmed', 'goal_done') AND n.created_at = now()
+WHERE n.user_id IN (SELECT id FROM demo_people) AND n.kind IN ('confirmed', 'goal_done') AND n.created_at = now()
   AND d.donor_id = n.user_id AND d.place_id = n.place_id AND d.status = 'confirmed';
 
 UPDATE public.notices n
 SET created_at = g.created_at, read = true
 FROM public.goals g
-WHERE n.user_id = (SELECT id FROM demo_dev) AND n.kind = 'new_goal' AND n.created_at = now()
+WHERE n.user_id IN (SELECT id FROM demo_people) AND n.kind = 'new_goal' AND n.created_at = now()
   AND g.place_id = n.place_id AND n.body LIKE public.fmt_amount(g, g.target, false) || ' até %';
 
--- A meta do freezer foi concluída pela doação da conta dev, não agora.
+-- A meta do freezer foi concluída pelas doações das contas reais, não agora.
 UPDATE public.goals
-SET done_at = (SELECT confirmed_at FROM public.donations WHERE id = '00000000-0000-4000-8000-000000000543')
+SET done_at = now() - interval '1 day'
 WHERE id = '00000000-0000-4000-8000-000000000222';
 
-INSERT INTO public.notices (user_id, kind, title, body, place_id, read, created_at) VALUES
-    ((SELECT id FROM demo_dev), 'volunteer_reminder',
-     'Sua ação está chegando',
+INSERT INTO public.notices (user_id, kind, title, body, place_id, read, created_at)
+SELECT p.id, n.kind::public.notice_kind, n.title, n.body, n.place::uuid, n.read, n.at
+FROM demo_people p
+CROSS JOIN (VALUES
+    ('volunteer_reminder', 'Sua ação está chegando',
      'Mutirão de pintura das salas, na Instituição Liberal, no sábado às 8h.',
      '00000000-0000-4000-8000-000000000103', false, now() - interval '40 minutes'),
-    ((SELECT id FROM demo_dev), 'monthly_reminder',
-     'Dia da sua doação mensal',
+    ('monthly_reminder', 'Dia da sua doação mensal',
      'R$ 20,00 para o Lar Aurora. Pague no app do seu banco e registre aqui.',
-     '00000000-0000-4000-8000-000000000106', true, now() - interval '18 days'),
+     '00000000-0000-4000-8000-000000000106', true, now() - interval '18 days')
+) AS n (kind, title, body, place, read, at);
+
+INSERT INTO public.notices (user_id, kind, title, body, place_id, read, created_at) VALUES
     ((SELECT id FROM demo_dev), 'approved',
      'Casa Exemplo foi aprovada',
      'Seu ponto já aparece no mapa com o selo de verificado.',

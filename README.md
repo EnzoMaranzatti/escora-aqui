@@ -13,11 +13,11 @@ O app não movimenta dinheiro e não cobra taxa.
 
 Ele tem três modos:
 
-| Modo | Quem usa | O que faz |
-| --- | --- | --- |
-| Doador | qualquer conta | mapa, perfil do ponto, doar, minhas doações, avisos |
-| Instituição | quem cadastrou um ponto | painel, metas, doações para confirmar, dados do ponto |
-| Equipe de validação | contas marcadas como equipe no banco | aprovar cadastros, denúncias, pausar e remover pontos |
+| Modo                  | Quem usa                             | O que faz                                               |
+| --------------------- | ------------------------------------ | ------------------------------------------------------- |
+| Doador                | qualquer conta                       | mapa, perfil do ponto, doar, minhas doações, avisos   |
+| Instituição         | quem cadastrou um ponto              | painel, metas, doações para confirmar, dados do ponto |
+| Equipe de validação | contas marcadas como equipe no banco | aprovar cadastros, denúncias, pausar e remover pontos  |
 
 Feito em Flutter, com back-end no [Supabase](https://supabase.com) (plano gratuito).
 
@@ -240,10 +240,12 @@ novo, os pontos que já existem dão erro de id repetido: apague-os antes no
 painel (Table Editor).
 
 Para a apresentação, o `seed_apresentacao.sql` acrescenta 10 doadores
-fictícios, 37 doações em vários estados, 14 avaliações, avisos para a conta de
-teste e mais 6 pontos com metas. Rode-o uma vez, depois do `seed.sql`, colando
-o arquivo no **SQL Editor** do painel. Se os dados já estiverem lá, ele para
-sem mudar nada.
+fictícios, doações em vários estados, avaliações e mais 6 pontos com metas.
+Toda conta que já existe quando ele roda ganha o mesmo lado de doador (doações,
+inscrição, doação mensal, pontos seguidos e avisos); a Casa Exemplo e a equipe
+continuam só na `dev.drenato@gmail.com`. Rode-o uma vez, depois do `seed.sql`,
+colando o arquivo no **SQL Editor** do painel. Se os dados já estiverem lá, ele
+para sem mudar nada.
 
 ### Testar mudanças no banco sem mexer no projeto
 
@@ -266,11 +268,11 @@ telas só chamam essas funções.
 
 O que fica configurado no painel do Supabase (não está no Git):
 
-| Onde | Como deixar |
-| --- | --- |
-| Authentication → Sign In / Providers → **Email** | ligado; **Confirm email** desligado; senha mínima **8** |
-| Authentication → Sign In / Providers → **Google** | ligado; Client IDs = `GOOGLE_WEB_CLIENT_ID,GOOGLE_IOS_CLIENT_ID` (do `env.json`, nessa ordem); Client Secret = chave secreta do cliente Web; **Skip nonce checks** desligado |
-| Authentication → URL Configuration → **Redirect URLs** | `escoraaqui://senha-nova` (já está no `config.toml`; enviado com `supabase config push`) |
+| Onde                                                           | Como deixar                                                                                                                                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication → Sign In / Providers → **Email**       | ligado; **Confirm email** desligado; senha mínima **8**                                                                                                                   |
+| Authentication → Sign In / Providers → **Google**      | ligado; Client IDs = `GOOGLE_WEB_CLIENT_ID,GOOGLE_IOS_CLIENT_ID` (do `env.json`, nessa ordem); Client Secret = chave secreta do cliente Web; **Skip nonce checks** desligado |
+| Authentication → URL Configuration → **Redirect URLs** | `escoraaqui://senha-nova` (já está no `config.toml`; enviado com `supabase config push`)                                                                                       |
 
 No Google Cloud, enquanto o app estiver "em teste", só os e-mails cadastrados
 em Google Auth Platform → Público → **Usuários de teste** conseguem entrar com Google.
@@ -321,17 +323,17 @@ Antes de juntar na `main`, o `flutter analyze` precisa terminar sem nenhum aviso
 
 ## Problemas comuns
 
-| O que aparece | O que é | Como resolver |
-| --- | --- | --- |
-| `No supported devices connected` | o simulador está desligado | ligue um iPhone (veja [Abrir o simulador](#2-abrir-o-simulador)) |
-| `FileSystemException … Operation timed out, errno = 60` no build | a pasta do projeto está no iCloud (Mesa ou Documentos) e o iCloud tirou o arquivo do disco | mova o projeto para fora do iCloud (ex.: `~/Projetos`). Se não der, apague `build` e `.dart_tool` e crie no lugar links para `~/Library/Caches` (`ln -s ~/Library/Caches/escora-aqui-build build`) |
-| O app abre sempre na mesma tela | foi rodado com `START=...` | rode de novo sem o `START` |
-| "Não deu para carregar os pontos" | migração que o app usa ainda não está no banco, o projeto do Supabase foi pausado ou falta internet | rode `supabase migration list`; se faltar alguma, `supabase db push`. Se o projeto estiver pausado, reative no painel |
-| O botão de criar conta fica girando | o login por e-mail está desligado no painel | ligue em Authentication → Sign In / Providers → Email |
-| "Acesso bloqueado" no Google | o e-mail não está nos usuários de teste do Google Cloud | adicione em Google Auth Platform → Público → Usuários de teste |
-| O e-mail de "esqueci minha senha" não chega | limite do e-mail gratuito, ou o e-mail não é da equipe do projeto | olhe o spam, espere alguns minutos ou use um e-mail da equipe |
-| `null value in column "owner_id"` ao rodar o seed | a conta `dev.drenato@gmail.com` não existe nesse banco | crie a conta antes (Authentication → Users) |
-| O simulador pede passkey no login do Google | o simulador não tem as passkeys do seu iPhone | na tela do Google, toque em "Tentar de outro jeito" e entre com a senha |
+| O que aparece                                                       | O que é                                                                                                | Como resolver                                                                                                                                                                                                 |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `No supported devices connected`                                  | o simulador está desligado                                                                             | ligue um iPhone (veja [Abrir o simulador](#2-abrir-o-simulador))                                                                                                                                               |
+| `FileSystemException … Operation timed out, errno = 60` no build | a pasta do projeto está no iCloud (Mesa ou Documentos) e o iCloud tirou o arquivo do disco             | mova o projeto para fora do iCloud (ex.: `~/Projetos`). Se não der, apague `build` e `.dart_tool` e crie no lugar links para `~/Library/Caches` (`ln -s ~/Library/Caches/escora-aqui-build build`) |
+| O app abre sempre na mesma tela                                     | foi rodado com `START=...`                                                                            | rode de novo sem o `START`                                                                                                                                                                                  |
+| "Não deu para carregar os pontos"                                  | migração que o app usa ainda não está no banco, o projeto do Supabase foi pausado ou falta internet | rode `supabase migration list`; se faltar alguma, `supabase db push`. Se o projeto estiver pausado, reative no painel                                                                                     |
+| O botão de criar conta fica girando                                | o login por e-mail está desligado no painel                                                            | ligue em Authentication → Sign In / Providers → Email                                                                                                                                                       |
+| "Acesso bloqueado" no Google                                        | o e-mail não está nos usuários de teste do Google Cloud                                              | adicione em Google Auth Platform → Público → Usuários de teste                                                                                                                                            |
+| O e-mail de "esqueci minha senha" não chega                        | limite do e-mail gratuito, ou o e-mail não é da equipe do projeto                                     | olhe o spam, espere alguns minutos ou use um e-mail da equipe                                                                                                                                                 |
+| `null value in column "owner_id"` ao rodar o seed                 | a conta `dev.drenato@gmail.com` não existe nesse banco                                               | crie a conta antes (Authentication → Users)                                                                                                                                                                  |
+| O simulador pede passkey no login do Google                         | o simulador não tem as passkeys do seu iPhone                                                          | na tela do Google, toque em "Tentar de outro jeito" e entre com a senha                                                                                                                                       |
 
 ## Mapa (gratuito, sem chave)
 
@@ -368,16 +370,16 @@ das migrações.
 
 ## Andamento
 
-| Fase | O que é | Situação |
-| --- | --- | --- |
-| 1 · Fundação | tabelas, permissões, dados de teste, app ligado ao Supabase | pronta |
-| 2 · Contas | criar conta, login (e-mail e Google), perfil do onboarding | pronta no iOS (Google no Android pendente) |
-| 3 · Mapa e leitura | pontos por raio, perfil do ponto e metas vindos do banco | pronta |
-| 4 · Doador | registrar doações, seguir, avaliar, denunciar, doação mensal | pronta |
-| 5 · Instituição | cadastro, fotos, confirmar doações, metas, troca de chave Pix | pronta (sem verificação por SMS, que é paga) |
-| 6 · Equipe | fila de validação, denúncias, pausar e remover pontos | pronta |
-| 7 · Avisos | lembretes diários, avisos em tempo real | pronta, sem push no celular (exige a conta paga da Apple) |
-| 8 · Produção | termos, LGPD, privacidade, backup | termos, privacidade e apagar a conta prontos; backup é manual |
+| Fase                | O que é                                                         | Situação                                                     |
+| ------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------- |
+| 1 · Fundação     | tabelas, permissões, dados de teste, app ligado ao Supabase     | pronta                                                         |
+| 2 · Contas         | criar conta, login (e-mail e Google), perfil do onboarding       | pronta no iOS (Google no Android pendente)                     |
+| 3 · Mapa e leitura | pontos por raio, perfil do ponto e metas vindos do banco         | pronta                                                         |
+| 4 · Doador         | registrar doações, seguir, avaliar, denunciar, doação mensal | pronta                                                         |
+| 5 · Instituição  | cadastro, fotos, confirmar doações, metas, troca de chave Pix  | pronta (sem verificação por SMS, que é paga)                |
+| 6 · Equipe         | fila de validação, denúncias, pausar e remover pontos         | pronta                                                         |
+| 7 · Avisos         | lembretes diários, avisos em tempo real                         | pronta, sem push no celular (exige a conta paga da Apple)      |
+| 8 · Produção     | termos, LGPD, privacidade, backup                                | termos, privacidade e apagar a conta prontos; backup é manual |
 
 Ainda em aberto: confirmar o prazo de revisão dos pontos (hoje, 90 dias) e
 decidir se uma recusa deve impedir um novo cadastro com o mesmo CNPJ (hoje não impede).
