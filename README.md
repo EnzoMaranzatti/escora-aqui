@@ -185,7 +185,9 @@ supabase/
     …_fase7_avisos.sql           tempo real e tarefa diária (pg_cron)
     …_fase8_conta.sql            apagar a própria conta
     …_fase8_privacidade.sql      contato do responsável privado; comprovante sai junto com a conta
+    …_cnpj_no_envio.sql          CNPJ conferido pelo banco no envio do cadastro
   seed.sql           dados de teste (14 pontos, 15 metas, 3 denúncias)
+  seed_apresentacao.sql  doadores, doações, avaliações, avisos e mais 6 pontos (fictícios)
 ```
 
 ### CLI do Supabase
@@ -236,6 +238,12 @@ supabase db push --include-seed
 Ele já foi rodado no banco do projeto. Se o `seed.sql` mudar e for rodado de
 novo, os pontos que já existem dão erro de id repetido: apague-os antes no
 painel (Table Editor).
+
+Para a apresentação, o `seed_apresentacao.sql` acrescenta 10 doadores
+fictícios, 37 doações em vários estados, 14 avaliações, avisos para a conta de
+teste e mais 6 pontos com metas. Rode-o uma vez, depois do `seed.sql`, colando
+o arquivo no **SQL Editor** do painel. Se os dados já estiverem lá, ele para
+sem mudar nada.
 
 ### Testar mudanças no banco sem mexer no projeto
 

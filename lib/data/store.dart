@@ -132,7 +132,16 @@ class AppStore extends ChangeNotifier {
     _ready = true;
     center = onboarding.position ?? center;
     filterCauses.addAll(onboarding.selectedCauses);
+    onboarding.addListener(_onPlace);
     return refresh();
+  }
+
+  /// A new city or GPS position: the 50 km search follows it.
+  void _onPlace() {
+    final p = onboarding.position;
+    if (p == null || p == center) return;
+    center = p;
+    refresh();
   }
 
   /// Reads everything again from the database. Calls that arrive during a
