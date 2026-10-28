@@ -39,7 +39,7 @@ class CepAddress {
 abstract final class BrApi {
   /// CNPJs used by the demo data answer locally, so the demo works offline.
   static const _demo = {
-    '22333444000155': CnpjFound('Associação Cozinha Comunitária Vila Nova', 'ativa'),
+    '22333444000181': CnpjFound('Associação Cozinha Comunitária Vila Nova', 'ativa'),
     '11111111000191': CnpjFound('Associação Exemplo Inativa', 'baixada'),
   };
 

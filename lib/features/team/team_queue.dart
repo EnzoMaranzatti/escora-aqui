@@ -14,6 +14,7 @@ import '../../core/widgets/kit.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
+import '../../data/br_api.dart';
 import '../../data/store.dart';
 import '../map/escora_map.dart';
 
@@ -139,14 +140,22 @@ class _ReviewScreenState extends State<ReviewScreen> {
   List<(String, String, String?, Widget?)> get _items {
     final p = _p;
     return [
-      (
-        'CNPJ',
-        p.cnpj != null
-            ? 'Ativo na base pública · ${p.legalName}'
-            : 'Sem CNPJ · indicado por ${p.indicatedBy}, aceito em ${Fmt.day(widget.submission.sentAt)}',
-        'O nome e a atividade combinam com o ponto?',
-        null,
-      ),
+      if (p.cnpj != null)
+        (
+          'CNPJ',
+          p.cnpjUnchecked
+              ? '${p.cnpj} · não consultado no cadastro (a base pública estava fora do ar)'
+              : '${p.cnpj} · informado: ${p.legalName}',
+          'A base pública confirma? O nome e a atividade combinam com o ponto?',
+          _CnpjCheck(cnpj: p.cnpj!, informed: p.cnpjUnchecked ? '' : p.legalName),
+        )
+      else
+        (
+          'CNPJ',
+          'Sem CNPJ · indicado por ${p.indicatedBy}, aceito em ${Fmt.day(widget.submission.sentAt)}',
+          'O nome e a atividade combinam com o ponto?',
+          null,
+        ),
       (
         'Endereço',
         '${p.address} · pino no mapa',
@@ -302,6 +311,78 @@ class _ReviewScreenState extends State<ReviewScreen> {
           ),
       ],
     );
+  }
+}
+
+/// Looks the CNPJ up again from the team's phone: the name and status the
+/// point sent came from the applicant's phone and can't be trusted alone.
+class _CnpjCheck extends StatefulWidget {
+  const _CnpjCheck({required this.cnpj, required this.informed});
+
+  final String cnpj;
+
+  /// Legal name sent at signup; empty when it was never looked up.
+  final String informed;
+
+  @override
+  State<_CnpjCheck> createState() => _CnpjCheckState();
+}
+
+class _CnpjCheckState extends State<_CnpjCheck> {
+  CnpjResult? _result;
+
+  @override
+  void initState() {
+    super.initState();
+    _lookup();
+  }
+
+  Future<void> _lookup() async {
+    setState(() => _result = null);
+    final r = Fmt.cnpjValid(widget.cnpj) ? await BrApi.cnpj(Fmt.digits(widget.cnpj)) : const CnpjNotFound();
+    if (mounted) setState(() => _result = r);
+  }
+
+  static String _key(String s) => Fmt.fold(s).replaceAll(RegExp('[^a-z0-9]'), '');
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (_result) {
+      null => const NoticeBanner(
+        tone: Tone.neutral,
+        icon: PhosphorIconsRegular.magnifyingGlass,
+        text: 'Consultando o CNPJ na base pública…',
+      ),
+      CnpjOffline() => NoticeBanner(
+        tone: Tone.neutral,
+        icon: PhosphorIconsRegular.wifiSlash,
+        text: 'Não deu para consultar a base pública agora.',
+        action: 'Consultar de novo',
+        onAction: _lookup,
+      ),
+      CnpjNotFound() => const NoticeBanner(
+        tone: Tone.error,
+        text: 'Esse CNPJ não existe na base pública. Peça um ajuste ou recuse o cadastro.',
+      ),
+      CnpjFound(:final legalName, :final status, :final active) when !active => NoticeBanner(
+        tone: Tone.error,
+        text: 'Base pública: $legalName, $status. Para aparecer no mapa, o CNPJ precisa estar ativo.',
+      ),
+      CnpjFound(:final legalName) when widget.informed.isEmpty => NoticeBanner(
+        tone: Tone.info,
+        text: 'Base pública: $legalName, ativa. Confira se é a instituição deste ponto.',
+      ),
+      CnpjFound(:final legalName) when _key(legalName) != _key(widget.informed) => NoticeBanner(
+        tone: Tone.alert,
+        title: 'Razão social diferente',
+        text: 'Base pública: $legalName. No cadastro: ${widget.informed}.',
+      ),
+      CnpjFound(:final legalName) => NoticeBanner(
+        tone: Tone.success,
+        icon: PhosphorIconsFill.sealCheck,
+        text: 'Base pública: $legalName, ativa. Confere com o cadastro.',
+      ),
+    };
   }
 }
 

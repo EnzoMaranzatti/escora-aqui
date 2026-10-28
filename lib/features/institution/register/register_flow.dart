@@ -208,6 +208,7 @@ class _StepInstitutionState extends State<_StepInstitution> {
   Future<void> _lookup() async {
     final digits = Fmt.digits(_cnpj.text);
     if (digits.length != 14) return;
+    if (!Fmt.cnpjValid(digits)) return setState(() => _cnpjTried = true);
     FocusScope.of(context).unfocus();
     setState(() {
       _checking = true;
@@ -226,6 +227,7 @@ class _StepInstitutionState extends State<_StepInstitution> {
   String? get _cnpjError {
     final digits = Fmt.digits(_cnpj.text);
     if (_cnpjTried && digits.length != 14) return 'Confira o CNPJ: são 14 números.';
+    if (digits.length == 14 && !Fmt.cnpjValid(digits)) return 'Confira o CNPJ: os números não batem.';
     final r = _result;
     if (r is CnpjNotFound) return 'Não encontramos esse CNPJ na base pública. Confira os números.';
     if (r is CnpjFound && !r.active) {

@@ -189,6 +189,7 @@ class Place {
     this.cnpj,
     this.legalName = '',
     this.cnpjStatus = 'ativa',
+    this.cnpjUnchecked = false,
     this.indicatedBy,
     required this.accepts,
     this.pixKeyType,
@@ -230,6 +231,9 @@ class Place {
   String? cnpj;
   String legalName;
   String cnpjStatus;
+
+  /// BrasilAPI was offline at signup: nobody has looked the CNPJ up yet.
+  bool cnpjUnchecked;
 
   /// Verified institution that vouches for a point without CNPJ.
   String? indicatedBy;
@@ -311,6 +315,7 @@ class Place {
     cnpj = o.cnpj;
     legalName = o.legalName;
     cnpjStatus = o.cnpjStatus;
+    cnpjUnchecked = o.cnpjUnchecked;
     indicatedBy = o.indicatedBy;
     accepts = o.accepts;
     pixKeyType = o.pixKeyType;

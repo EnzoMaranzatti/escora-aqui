@@ -93,6 +93,7 @@ conferem quem chama.
 - **Trocar a chave Pix** pausa o Pix do ponto (`pix_paused`) até a equipe aprovar. Com o Pix pausado, o banco recusa doações Pix.
 - **Mudanças de dados** (endereço, foto, responsável, chave Pix) passam pela equipe; nome, "sobre", o que distribui e horários não.
 - **Uma conta, um ponto** (`one_place_per_owner`). Recusado ou removido não conta.
+- **CNPJ no envio** (`submit_place`, com `cnpj_valido`): o banco recusa CNPJ com dígitos errados, CNPJ que já está em outro ponto (na fila, em ajuste, ativo ou pausado) e CNPJ que já teve cadastro recusado. A razão social vem do celular de quem cadastra, por isso a fila da equipe consulta a BrasilAPI de novo e compara (e mostra "não consultado" quando a consulta falhou no cadastro).
 - **Revisão a cada 90 dias** (`last_reviewed`); a equipe vê os vencidos.
 - **Fila da equipe:** urgente com mais de 3 dias úteis (calculado no app).
 - **Aprovar** ativa o ponto e publica as metas guardadas; **ajuste** e **recusa** mandam motivo; **pausar** e **remover** tiram do mapa. Numa mudança de dados, ajuste e recusa só descartam a mudança (e despausam o Pix).
@@ -122,15 +123,15 @@ valendo para o que cada um recebe.
 | SMS do celular do responsável | Tirado (SMS é pago). O telefone é só contato; a equipe confere |
 | Um responsável pode ter mais de um ponto? | Não: uma conta, um ponto |
 | Dados de demonstração | Só dados reais. A conta `dev.drenato@gmail.com` é da equipe e dona dos 14 pontos de teste |
-
-Ainda em aberto: confirmar o prazo de 90 dias e se uma recusa deve bloquear
-novos cadastros com o mesmo CNPJ (hoje não bloqueia).
+| Prazo da revisão periódica (2026-10-28) | 90 dias |
+| Uma recusa bloqueia o mesmo CNPJ? (2026-10-28) | Sim: a recusa é para casos graves. Para tentar de novo, a pessoa fala com a equipe |
+| O CNPJ é dado sensível? (2026-10-28) | Não: é público na Receita e aparece no perfil do ponto. Sensíveis são o nome e o telefone do responsável (só dono e equipe) e os comprovantes (balde privado) |
 
 ## 8. Serviços externos (todos gratuitos e sem chave)
 
 - **Mapa:** OpenFreeMap, estilo em `assets/map/escora_style.json`.
 - **Cidades:** API do IBGE. **Geocodificação:** nativa do iOS/Android (`geocoding`).
-- **CNPJ:** BrasilAPI. **CEP:** ViaCEP (`lib/data/br_api.dart`).
+- **CNPJ:** BrasilAPI, no cadastro e de novo na fila da equipe. **CEP:** ViaCEP (`lib/data/br_api.dart`).
 
 ## 9. Testar o banco sem mexer no projeto de verdade
 

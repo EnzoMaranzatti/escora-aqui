@@ -124,7 +124,7 @@ class _TourScreenState extends State<TourScreen> {
           ..phone = '(17) 99812-3344'
           ..phoneVerified = true
           ..hasCnpj = true
-          ..cnpj = '22.333.444/0001-55'
+          ..cnpj = '22.333.444/0001-81'
           ..legalName = 'Associação Cozinha Comunitária Vila Nova'
           ..cnpjStatus = 'ativa'
           ..cnpjConfirmed = true
@@ -135,7 +135,7 @@ class _TourScreenState extends State<TourScreen> {
           ..number = '512'
           ..neighborhood = 'Vila Nova'
           ..hours = 'segunda a sexta, das 8h às 17h'
-          ..pixKey = '22.333.444/0001-55'
+          ..pixKey = '22.333.444/0001-81'
           ..payee = 'Associação Cozinha Comunitária Vila Nova'
           ..accepts.addAll({HelpType.pix, HelpType.itens});
         WidgetsBinding.instance.addPostFrameCallback((_) => openRegister(nav.context));

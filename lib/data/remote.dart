@@ -233,6 +233,7 @@ Place _place(Map<String, dynamic> r) {
     cnpj: r['cnpj'] as String?,
     legalName: r['legal_name'] as String,
     cnpjStatus: r['cnpj_status'] as String,
+    cnpjUnchecked: r['cnpj_unchecked'] as bool,
     accepts: _helpTypes(r['accepts']),
     pixKeyType: r['pix_key_type'] as String?,
     pixKey: r['pix_key'] as String?,

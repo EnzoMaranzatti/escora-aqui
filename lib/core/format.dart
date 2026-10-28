@@ -92,6 +92,22 @@ abstract final class Fmt {
 
   static String digits(String s) => s.replaceAll(RegExp(r'\D'), '');
 
+  /// CNPJ check digits (same rule as `cnpj_valido` in the database).
+  static bool cnpjValid(String s) {
+    final d = digits(s).split('').map(int.parse).toList();
+    if (d.length != 14 || d.every((x) => x == d[0])) return false;
+    const weights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    for (final n in [12, 13]) {
+      var sum = 0;
+      for (var i = 0; i < n; i++) {
+        sum += d[i] * weights[i + 13 - n];
+      }
+      final r = sum % 11;
+      if (d[n] != (r < 2 ? 0 : 11 - r)) return false;
+    }
+    return true;
+  }
+
   /// Lowercase without accents, for search.
   static String fold(String s) {
     const from = 'áàâãäéèêëíìîïóòôõöúùûüçñ';
