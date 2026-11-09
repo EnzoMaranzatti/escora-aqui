@@ -10,7 +10,7 @@ import 'remote.dart' as remote;
 
 export 'models.dart';
 
-enum AppMode { donor, institution, team }
+enum AppMode { donor, institution, team, partner }
 
 /// Signup draft for the institution's point. Kept on the device while the
 /// person goes through the 5 steps; it reaches the database on "Enviar".
@@ -94,6 +94,16 @@ class AppStore extends ChangeNotifier {
   final followed = <String>{};
   final monthly = <MonthlyGift>[];
 
+  // ── Points (fase 9) ───────────────────────────────────────
+  /// Balance, level and streaks. Null until the first load finishes.
+  PointsProfile? points;
+  final pointsEntries = <PointsEntry>[];
+
+  /// Everything the database returned, including items that left the catalog
+  /// but still appear in [redemptions]. Screens use [catalog].
+  final catalogItems = <CatalogItem>[];
+  final redemptions = <Redemption>[];
+
   // ── Donor preferences ─────────────────────────────────────
   final filterTypes = <HelpType>{};
   final filterCauses = <String>{};
@@ -103,6 +113,14 @@ class AppStore extends ChangeNotifier {
   bool notifyGoals = true;
   bool notifyConfirm = true;
   bool notifyVolunteer = true;
+
+  // ── Partner (fase 10) ─────────────────────────────────────
+  /// A empresa que esta conta administra. Nula em conta de doador.
+  Partner? myPartner;
+
+  /// Os cupons da empresa, com as contas do banco. Carregados pela tela,
+  /// não pelo [refresh]: só o modo parceiro precisa deles.
+  final partnerCoupons = <PartnerCoupon>[];
 
   // ── Institution ───────────────────────────────────────────
   String? myPointId;
@@ -115,6 +133,14 @@ class AppStore extends ChangeNotifier {
   /// Messages for the person when the database refuses an action
   /// (main.dart shows them as a toast).
   final errors = StreamController<String>.broadcast();
+
+  /// O banco disse que a pessoa subiu de nível (main.dart abre a
+  /// comemoração). Só dispara quando o nível muda de verdade, uma vez.
+  final levelUps = StreamController<PointsLevel>.broadcast();
+
+  /// Pontos que entraram com o app aberto: o login do dia, ou uma doação
+  /// que o ponto confirmou agora (main.dart mostra um aviso curto).
+  final pointsGained = StreamController<int>.broadcast();
 
   /// True until the first load finishes.
   bool loading = true;
@@ -134,6 +160,25 @@ class AppStore extends ChangeNotifier {
     filterCauses.addAll(onboarding.selectedCauses);
     onboarding.addListener(_onPlace);
     return refresh();
+  }
+
+  /// Pega os pontos de hoje (fase 9). Deixou de rodar sozinho no [init]:
+  /// quem toca o botão na aba Pontos é a pessoa, porque coletar todo dia é
+  /// o que faz ela voltar. O banco ignora a segunda chamada no mesmo dia.
+  ///
+  /// Devolve quantos pontos entraram, ou 0 se o dia já tinha sido coletado.
+  Future<int> claimDailyPoints() async {
+    if (Supabase.instance.client.auth.currentUser == null) return 0;
+    final antes = points?.lifetime ?? 0;
+    try {
+      await remote.registerDailyLogin();
+    } catch (e) {
+      debugPrint('store: daily login failed: $e');
+      errors.add('Não deu para pegar os pontos de hoje. Confira a internet.');
+      return 0;
+    }
+    await refresh();
+    return ((points?.lifetime ?? 0) - antes).clamp(0, 1 << 30);
   }
 
   /// A new city or GPS position: the 50 km search follows it.
@@ -203,6 +248,28 @@ class AppStore extends ChangeNotifier {
     reports
       ..clear()
       ..addAll(s.reports);
+    final antes = points;
+    points = s.points;
+    final agora = s.points;
+    // Subiu de nível: quem decide é o banco, aqui só avisamos a tela.
+    if (antes != null && agora != null && agora.level.index > antes.level.index) {
+      levelUps.add(agora.level);
+    }
+    // Pontos que chegaram com o app aberto. Na primeira carga [antes] é
+    // nulo, então o saldo que já existia não vira aviso.
+    if (antes != null && agora != null && agora.lifetime > antes.lifetime) {
+      pointsGained.add(agora.lifetime - antes.lifetime);
+    }
+    pointsEntries
+      ..clear()
+      ..addAll(s.pointsEntries);
+    catalogItems
+      ..clear()
+      ..addAll(s.catalog);
+    redemptions
+      ..clear()
+      ..addAll(s.redemptions);
+    myPartner = s.myPartner;
   }
 
   /// Logout: forgets everything that belonged to the person.
@@ -211,9 +278,23 @@ class AppStore extends ChangeNotifier {
     _channel = null;
     _ready = false;
     loading = true;
-    for (final l in <List<Object>>[places, donations, notices, reports, queue, monthly]) {
+    for (final l in <List<Object>>[
+      places,
+      donations,
+      notices,
+      reports,
+      queue,
+      monthly,
+      pointsEntries,
+      catalogItems,
+      redemptions,
+    ]) {
       l.clear();
     }
+    points = null;
+    myPartner = null;
+    partnerCoupons.clear();
+    _contacts.clear();
     followed.clear();
     filterTypes.clear();
     filterCauses.clear();
@@ -434,7 +515,88 @@ class AppStore extends ChangeNotifier {
     return d;
   }
 
+  // ── Donor: points (fase 9) ────────────────────────────────
+  /// What the catalog screen shows: only what is still on offer.
+  List<CatalogItem> get catalog => catalogItems.where((i) => i.active).toList();
+
+  /// Trades points for a coupon. The database checks the level, the stock and
+  /// the balance, and its message arrives through [errors] if it refuses.
+  void redeem(CatalogItem item) {
+    final p = points;
+    if (p != null) p.balance -= item.cost;
+    if (item.stock case final s?) item.stock = s - 1;
+    _save(() => remote.redeemCatalogItem(item.id));
+  }
+
+  // ── Partner (fase 10) ─────────────────────────────────────
+  /// Recarrega "Meus cupons". O banco já devolve as contas prontas.
+  Future<void> loadPartnerCoupons() async {
+    try {
+      final itens = await remote.partnerCatalog();
+      partnerCoupons
+        ..clear()
+        ..addAll(itens);
+    } catch (e) {
+      debugPrint('store: partner catalog failed: $e');
+      errors.add('Não deu para carregar seus cupons. Confira a internet.');
+    }
+    notifyListeners();
+  }
+
+  /// Procura um cupom pelo código. Devolve null quando o banco recusa — a
+  /// mensagem dele ("Cupom não encontrado.") vai para quem chamou.
+  Future<({CouponLookup? coupon, String? error})> findCoupon(String code) async {
+    try {
+      return (coupon: await remote.partnerFindRedemption(code), error: null);
+    } catch (e) {
+      debugPrint('store: find coupon failed: $e');
+      return (coupon: null, error: _message(e));
+    }
+  }
+
+  /// Dá baixa no cupom. Devolve o cupom já marcado, ou a mensagem do banco
+  /// quando ele recusa (código de outra empresa, ou já usado).
+  Future<({CouponLookup? coupon, String? error})> useCoupon(CouponLookup c) async {
+    try {
+      final quando = await remote.partnerUseRedemption(c.code);
+      // A lista de cupons tem uma contagem de usados que acabou de mudar.
+      unawaited(loadPartnerCoupons());
+      return (
+        coupon: CouponLookup(
+          code: c.code,
+          title: c.title,
+          points: c.points,
+          date: c.date,
+          donorName: c.donorName,
+          usedAt: quando,
+        ),
+        error: null,
+      );
+    } catch (e) {
+      debugPrint('store: use coupon failed: $e');
+      return (coupon: null, error: _message(e));
+    }
+  }
+
   // ── Institution: donations ────────────────────────────────
+
+  /// Contato de quem doou (fase 11). Guardado em memória para a tela da
+  /// doação não consultar o banco de novo a cada rebuild. Devolve nulo
+  /// quando a conta foi apagada ou a migração ainda não foi aplicada.
+  final _contacts = <String, DonorContact?>{};
+
+  Future<DonorContact?> donorContact(String donationId) async {
+    if (_contacts.containsKey(donationId)) return _contacts[donationId];
+    try {
+      final c = await remote.donorContact(donationId);
+      _contacts[donationId] = c;
+      return c;
+    } catch (e) {
+      debugPrint('store: contato do doador indisponível: $e');
+      return null;
+    }
+  }
+
   void confirm(Donation d) {
     _confirmHere(d);
     _save(() => remote.confirmDonation(d.id));

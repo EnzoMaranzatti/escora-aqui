@@ -359,6 +359,38 @@ class Place {
 
 enum DonationStatus { waiting, confirmed, notFound, enrolled, itemsAgreed, cancelled, absent }
 
+/// Contato de quem doou, do jeito que a instituição vê (fase 11). Vem da
+/// função `place_donor_contact`, que só responde para o dono do ponto que
+/// recebeu a doação.
+class DonorContact {
+  const DonorContact({
+    required this.name,
+    required this.firstName,
+    this.phone,
+    this.email,
+    this.city,
+    this.uf,
+    this.since,
+  });
+
+  final String name;
+  final String firstName;
+  final String? phone;
+  final String? email;
+  final String? city;
+  final String? uf;
+  final DateTime? since;
+
+  String? get place => city == null ? null : (uf == null ? city : '$city, $uf');
+
+  /// Só os dígitos, com o 55 na frente, do jeito que o WhatsApp pede.
+  String? get whatsapp {
+    final d = (phone ?? '').replaceAll(RegExp(r'\D'), '');
+    if (d.length < 10) return null;
+    return d.startsWith('55') ? d : '55$d';
+  }
+}
+
 class Donation {
   Donation({
     required this.id,
@@ -368,6 +400,7 @@ class Donation {
     required this.amount,
     required this.date,
     required this.donor,
+    this.donorId,
     this.mine = false,
     this.when,
     this.receipt = false,
@@ -388,6 +421,9 @@ class Donation {
 
   /// Donor's first name.
   final String donor;
+
+  /// Conta de quem doou. Nula se a pessoa apagou a conta.
+  final String? donorId;
   final bool mine;
 
   /// Delivery date (itens) or the action day (voluntariado).
@@ -543,6 +579,292 @@ class Submission {
     }
     return n;
   }
+}
+
+/// Levels of the rewards system (fase 9). The thresholds are the same ones in
+/// `supabase/migrations/..._fase9_bonificacao.sql`: the database decides the
+/// level, these numbers only draw the progress on screen.
+enum PointsLevel {
+  bronze('Bronze', 0, 0, 0),
+  prata('Prata', 5, 100, 50),
+  ouro('Ouro', 20, 500, 150),
+  black('Doador Black', null, 10000, 500);
+
+  const PointsLevel(this.label, this.donations, this.points, this.items);
+
+  final String label;
+
+  /// Donations of R$10+ that unlock it; null when this track doesn't reach it.
+  final int? donations;
+  final int points;
+  final int items;
+
+  PointsLevel? get next => index + 1 < values.length ? values[index + 1] : null;
+}
+
+/// Why points went in or out. The labels are placeholders until the points
+/// screens get their copy.
+enum PointsReason {
+  doacaoDinheiro('Doação em dinheiro'),
+  doacaoItem('Itens doados'),
+  loginDiario('Login diário'),
+  bonusMensalLogin('Mês completo'),
+  sequenciaDoacao('Sequência de doação'),
+  canje('Troca no catálogo');
+
+  const PointsReason(this.label);
+
+  final String label;
+}
+
+class PointsProfile {
+  PointsProfile({
+    required this.balance,
+    required this.lifetime,
+    required this.level,
+    required this.qualifyingDonations,
+    required this.itemsDonated,
+    required this.loginStreakDays,
+    required this.donationStreakMonths,
+    this.loginLastDate,
+    this.donationLastAt,
+  });
+
+  /// Points still to spend in the partners' catalog.
+  int balance;
+
+  /// Everything ever earned; never decays, and decides the level.
+  final int lifetime;
+  final PointsLevel level;
+  final int qualifyingDonations;
+  final int itemsDonated;
+  final int loginStreakDays;
+  final int donationStreakMonths;
+  final DateTime? loginLastDate;
+  final DateTime? donationLastAt;
+
+  PointsLevel? get nextLevel => level.next;
+
+  /// Os pontos de hoje já entraram? O banco guarda a data no fuso de São
+  /// Paulo; o aparelho de quem usa o app está no mesmo fuso.
+  bool get claimedToday {
+    final d = loginLastDate;
+    if (d == null) return false;
+    final hoje = DateTime.now();
+    return d.year == hoje.year && d.month == hoje.month && d.day == hoje.day;
+  }
+
+  /// Quanto vale abrir o app num dia: 2 de segunda a sexta, 4 no sábado e 6
+  /// no domingo. É a mesma conta do `register_daily_login` (fase 9) — aqui
+  /// só para a tela poder dizer o número antes de chamar o banco.
+  static int dailyValue([DateTime? day]) => switch ((day ?? DateTime.now()).weekday) {
+    DateTime.saturday => 4,
+    DateTime.sunday => 6,
+    _ => 2,
+  };
+
+  /// Os dias da semana atual (segunda a domingo) em que a pessoa já pontuou,
+  /// deduzidos da sequência que o banco mantém: os últimos [loginStreakDays]
+  /// dias terminam em [loginLastDate].
+  Set<int> get weekdaysClaimed {
+    final last = loginLastDate;
+    if (last == null || loginStreakDays <= 0) return const {};
+    final hoje = DateTime.now();
+    final monday = DateTime(hoje.year, hoje.month, hoje.day).subtract(Duration(days: hoje.weekday - 1));
+    final lastDay = DateTime(last.year, last.month, last.day);
+    return {
+      for (var i = 0; i < loginStreakDays; i++)
+        if (lastDay.subtract(Duration(days: i)).isAfter(monday.subtract(const Duration(hours: 1))))
+          lastDay.subtract(Duration(days: i)).weekday,
+    };
+  }
+
+  /// The three tracks to the next level, in the order of the level table.
+  /// Null progress means the track doesn't reach the next level.
+  List<({PointsTrack track, double progress, int missing})> get tracks {
+    final next = level.next;
+    return [
+      (track: PointsTrack.donations, from: level.donations ?? 0, to: next?.donations, has: qualifyingDonations),
+      (track: PointsTrack.points, from: level.points, to: next?.points, has: lifetime),
+      (track: PointsTrack.items, from: level.items, to: next?.items, has: itemsDonated),
+    ].map((t) {
+      final to = t.to;
+      if (to == null || to <= t.from) return (track: t.track, progress: 0.0, missing: 0);
+      return (
+        track: t.track,
+        progress: ((t.has - t.from) / (to - t.from)).clamp(0.0, 1.0),
+        missing: (to - t.has).clamp(0, to),
+      );
+    }).toList();
+  }
+
+  /// How far the next level is, along whichever of the three tracks is closest.
+  double get levelProgress =>
+      level.next == null ? 1 : tracks.map((t) => t.progress).reduce((a, b) => a > b ? a : b);
+
+  /// The track that gets to the next level first, and what's still missing on
+  /// it. Null on the last level.
+  ({PointsTrack track, int missing})? get nextStep {
+    if (level.next == null) return null;
+    final best = tracks.reduce((a, b) => a.progress >= b.progress ? a : b);
+    return (track: best.track, missing: best.missing);
+  }
+}
+
+/// The three ways to reach the next level; whichever arrives first counts.
+enum PointsTrack { donations, points, items }
+
+/// One line of the points statement (extrato).
+class PointsEntry {
+  const PointsEntry({
+    required this.id,
+    required this.amount,
+    required this.reason,
+    required this.note,
+    required this.date,
+  });
+
+  final String id;
+
+  /// Positive when earned, negative on a redemption.
+  final int amount;
+  final PointsReason reason;
+  final String note;
+  final DateTime date;
+}
+
+/// A company that gives coupons or tickets in exchange for exposure.
+class Partner {
+  const Partner({required this.id, required this.name, this.logo});
+
+  final String id;
+  final String name;
+  final String? logo;
+
+  ImageProvider? get image => photoImage(logo);
+}
+
+class CatalogItem {
+  CatalogItem({
+    required this.id,
+    required this.partner,
+    required this.title,
+    required this.description,
+    required this.cost,
+    required this.minLevel,
+    this.stock,
+    this.active = true,
+    this.photoPath,
+  });
+
+  final String id;
+  final Partner partner;
+  final String title;
+  final String description;
+  final int cost;
+  final PointsLevel minLevel;
+
+  /// null means no limit.
+  int? stock;
+
+  /// False when the item left the catalog; it still shows in past redemptions.
+  final bool active;
+
+  /// Foto do cupom dentro do app (assets/images/partners/...). Nula enquanto
+  /// a migração das fotos não roda: aí o card cai no ícone.
+  final String? photoPath;
+
+  bool get soldOut => stock != null && stock! <= 0;
+}
+
+class Redemption {
+  const Redemption({
+    required this.id,
+    required this.title,
+    required this.partnerName,
+    required this.points,
+    required this.code,
+    required this.date,
+  });
+
+  final String id;
+  final String title;
+  final String partnerName;
+  final int points;
+
+  /// What the person shows at the partner ("ESC-A1B2C3").
+  final String code;
+  final DateTime date;
+}
+
+// ── Parceiro (fase 10) ───────────────────────────────────────
+
+/// Um cupom do parceiro na tela "Meus cupons", com as contas já somadas
+/// pelo banco (partner_catalog). Vem no lugar de [CatalogItem] porque o
+/// parceiro precisa de duas coisas que o doador não vê: quantos cupons
+/// saíram e quantos já foram usados no balcão.
+class PartnerCoupon {
+  const PartnerCoupon({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.cost,
+    required this.minLevel,
+    required this.redeemed,
+    required this.used,
+    this.stock,
+    this.active = true,
+    this.photoPath,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final int cost;
+  final PointsLevel minLevel;
+
+  /// Quantos foram trocados por pontos, e quantos desses já tiveram baixa.
+  final int redeemed;
+  final int used;
+
+  /// null = sem limite.
+  final int? stock;
+  final bool active;
+  final String? photoPath;
+
+  ImageProvider? get image => photoImage(photoPath);
+
+  /// Trocados que ainda não apareceram no balcão.
+  int get pending => redeemed - used;
+
+  bool get soldOut => stock != null && stock! <= 0;
+}
+
+/// O que a tela de validação mostra depois de procurar um código.
+class CouponLookup {
+  const CouponLookup({
+    required this.code,
+    required this.title,
+    required this.points,
+    required this.date,
+    required this.donorName,
+    this.usedAt,
+  });
+
+  final String code;
+  final String title;
+  final int points;
+
+  /// Quando a pessoa trocou os pontos por este cupom.
+  final DateTime date;
+
+  /// Primeiro nome de quem trocou: o suficiente para conferir no balcão.
+  final String donorName;
+
+  /// Quando o parceiro deu baixa. Nulo = o cupom ainda vale.
+  final DateTime? usedAt;
+
+  bool get used => usedAt != null;
 }
 
 const adjustReasons = [

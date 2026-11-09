@@ -1,24 +1,44 @@
 import 'package:flutter/material.dart';
-import '../../core/icons.dart';
 
 import '../../core/format.dart';
+import '../../core/icons.dart';
+import '../../core/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/widgets/buttons.dart';
+import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/kit.dart';
+import '../../core/widgets/pressable.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
-import '../../data/remote.dart' as remote;
 import '../../data/store.dart';
 import '../shared/help_ui.dart';
+import 'donation_screen.dart';
+import 'donations_stats.dart';
 
-/// Tab inside "Doações" (Para confirmar · Confirmadas · Voluntários).
+/// Aba de dentro de "Doações" (Fila · Recebidas · Voluntários · Resumo).
 final inboxTab = ValueNotifier<int>(0);
 
-/// Where the institution checks what arrived. Confirming is what moves
-/// the goal and answers the donor (modelo B).
-class DonationsInboxScreen extends StatelessWidget {
+/// Onde a instituição confere o que chegou. Confirmar é o que move a meta e
+/// responde ao doador (modelo B). A lista é agrupada por mês e cada linha
+/// abre a doação inteira, com o contato de quem doou.
+class DonationsInboxScreen extends StatefulWidget {
   const DonationsInboxScreen({super.key});
+
+  @override
+  State<DonationsInboxScreen> createState() => _DonationsInboxScreenState();
+}
+
+class _DonationsInboxScreenState extends State<DonationsInboxScreen> {
+  String _busca = '';
+
+  /// Procura por nome de quem doou, pela meta e pelo valor digitado.
+  bool _combina(Donation d, Goal? g) {
+    final q = Fmt.fold(_busca.trim());
+    if (q.isEmpty) return true;
+    final valor = d.type == HelpType.pix ? Fmt.money(d.amount) : Fmt.count(d.amount);
+    final campos = [d.donor, g?.headline ?? '', d.type.label, valor];
+    return campos.any((c) => Fmt.fold(c).contains(q));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,61 +46,53 @@ class DonationsInboxScreen extends StatelessWidget {
       listenable: Listenable.merge([store, inboxTab]),
       builder: (context, _) {
         final p = store.myPoint!;
-        final all = store.incoming(p).where((d) => d.type != HelpType.voluntariado).toList();
-        final pending =
-            all.where((d) => d.status == DonationStatus.waiting || d.status == DonationStatus.itemsAgreed).toList()
+        final todas = store.incoming(p).where((d) => d.type != HelpType.voluntariado).toList();
+        final fila =
+            todas.where((d) => d.status == DonationStatus.waiting || d.status == DonationStatus.itemsAgreed).toList()
               ..sort((a, b) => a.date.compareTo(b.date));
-        final done = all
+        final recebidas = todas
             .where((d) => d.status == DonationStatus.confirmed || d.status == DonationStatus.notFound)
             .toList();
         final tab = inboxTab.value;
+        final busca = tab == 0 || tab == 1;
+
         return TabPage(
-          title: 'Doações para confirmar',
-          top: Segmented(
-            items: const ['Para confirmar', 'Confirmadas', 'Voluntários'],
-            index: tab,
-            onChanged: (i) => inboxTab.value = i,
-            dense: true,
+          title: 'Doações',
+          onRefresh: store.refresh,
+          subtitle: Text(
+            fila.isEmpty
+                ? '${recebidas.where((d) => d.status == DonationStatus.confirmed).length} confirmadas até agora'
+                : '${fila.length} ${fila.length == 1 ? 'esperando você' : 'esperando você'} · '
+                      '${recebidas.where((d) => d.status == DonationStatus.confirmed).length} confirmadas',
+            style: AppType.body(),
+          ),
+          top: Column(
+            children: [
+              Segmented(
+                items: const ['Fila', 'Recebidas', 'Voluntários', 'Resumo'],
+                index: tab,
+                onChanged: (i) => inboxTab.value = i,
+                dense: true,
+              ),
+              if (busca) ...[
+                const SizedBox(height: 10),
+                AppSearchField(
+                  hint: 'Buscar por nome, meta ou valor',
+                  semantic: 'Buscar uma doação',
+                  onChanged: (v) => setState(() => _busca = v),
+                ),
+              ],
+            ],
           ),
           slivers: [
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
               sliver: SliverList.list(
                 children: switch (tab) {
-                  0 => [
-                    if (pending.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 32),
-                        child: EmptyState(
-                          icon: PhosphorIconsRegular.tray,
-                          title: 'Nenhuma doação para confirmar.',
-                          text: 'Quando alguém registrar uma doação para o seu ponto, ela aparece aqui.',
-                        ),
-                      )
-                    else ...[
-                      const NoticeBanner(
-                        tone: Tone.info,
-                        icon: PhosphorIconsRegular.lightbulb,
-                        text:
-                            'Confira o extrato do banco ou o estoque antes de confirmar. A confirmação é o que mostra ao doador que a ajuda chegou.',
-                      ),
-                      const SizedBox(height: 12),
-                      for (final d in pending) ...[_PendingTile(d: d, place: p), const SizedBox(height: 10)],
-                    ],
-                  ],
-                  1 => [
-                    if (done.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 40),
-                        child: Text(
-                          'Nenhuma doação confirmada ainda.',
-                          textAlign: TextAlign.center,
-                          style: AppType.body(size: 15.5),
-                        ),
-                      ),
-                    for (final d in done) ...[_DoneTile(d: d, place: p), const SizedBox(height: 10)],
-                  ],
-                  _ => [const _Volunteers()],
+                  0 => _fila(p, fila),
+                  1 => _recebidas(p, recebidas),
+                  2 => [const _Volunteers()],
+                  _ => [DonationsSummary(place: p)],
                 },
               ),
             ),
@@ -89,226 +101,315 @@ class DonationsInboxScreen extends StatelessWidget {
       },
     );
   }
-}
 
-String _what(Donation d, Goal? g) =>
-    d.type == HelpType.pix ? Fmt.money(d.amount) : (g?.amount(d.amount) ?? Fmt.count(d.amount));
-
-class _PendingTile extends StatelessWidget {
-  const _PendingTile({required this.d, required this.place});
-
-  final Donation d;
-  final Place place;
-
-  Future<void> _received(BuildContext context, Goal? g) async {
-    final ok = await confirmSheet(
-      context,
-      icon: PhosphorIconsFill.checkCircle,
-      iconTone: Tone.success,
-      title: 'Confirmar o recebimento de ${_what(d, g)}?',
-      text: 'A meta avança e ${d.donor} recebe um aviso.',
-      confirm: 'Confirmar recebimento',
-      cancel: 'Voltar',
-    );
-    if (ok == null || !context.mounted) return;
-    store.confirm(d);
-    Toast.show(
-      context,
-      g == null ? 'Recebimento confirmado.' : 'Recebimento confirmado. A meta agora está em ${g.progressLabel}.',
-    );
+  List<Widget> _fila(Place p, List<Donation> fila) {
+    if (fila.isEmpty) {
+      return const [
+        Padding(
+          padding: EdgeInsets.only(top: 32),
+          child: EmptyState(
+            icon: PhosphorIconsRegular.tray,
+            title: 'Nenhuma doação para confirmar.',
+            text: 'Quando alguém registrar uma doação para o seu ponto, ela aparece aqui.',
+          ),
+        ),
+      ];
+    }
+    final lista = fila.where((d) => _combina(d, store.goal(p, d.goalId))).toList();
+    if (lista.isEmpty) return [_semResultado()];
+    return [
+      const NoticeBanner(
+        tone: Tone.info,
+        icon: PhosphorIconsRegular.lightbulb,
+        text:
+            'Confira o extrato do banco ou o estoque antes de confirmar. A confirmação é o que mostra ao doador '
+            'que a ajuda chegou.',
+      ),
+      const SizedBox(height: 14),
+      // A fila é curta e é onde se age: cada doação ganha um cartão com o
+      // botão de confirmar no rodapé, em vez de um botão solto na linha.
+      for (final (i, d) in lista.indexed) ...[
+        if (i > 0) const SizedBox(height: 12),
+        _QueueCard(d: d, goal: store.goal(p, d.goalId)),
+      ],
+      const SizedBox(height: 8),
+    ];
   }
 
-  Future<void> _missing(BuildContext context) async {
-    final ok = await confirmSheet(
-      context,
+  List<Widget> _recebidas(Place p, List<Donation> recebidas) {
+    if (recebidas.isEmpty) {
+      return const [
+        Padding(
+          padding: EdgeInsets.only(top: 32),
+          child: EmptyState(
+            icon: PhosphorIconsRegular.clockCounterClockwise,
+            title: 'Nenhuma doação confirmada ainda.',
+            text: 'O que você confirmar fica guardado aqui, com a data e quem doou.',
+          ),
+        ),
+      ];
+    }
+    final lista = recebidas.where((d) => _combina(d, store.goal(p, d.goalId))).toList();
+    if (lista.isEmpty) return [_semResultado()];
+    return _agrupado(p, lista);
+  }
+
+  Widget _semResultado() => Padding(
+    padding: const EdgeInsets.only(top: 28),
+    child: EmptyState(
       icon: PhosphorIconsRegular.magnifyingGlass,
-      iconTone: Tone.neutral,
-      title: 'Marcar como não encontrada?',
-      text:
-          '${d.donor} recebe um aviso para conferir o comprovante e registrar de novo, se precisar. Antes, confira o extrato a partir de ${Fmt.day(d.date)}.',
-      confirm: 'Marcar como não encontrada',
-      cancel: 'Voltar',
-    );
-    if (ok != null) store.markNotFound(d);
-  }
+      title: 'Nada encontrado.',
+      text: 'Nenhuma doação combina com "${_busca.trim()}". Tente o primeiro nome de quem doou.',
+    ),
+  );
 
-  void _receipt(BuildContext context) {
-    showAppSheet<void>(
-      context,
-      builder: (context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Comprovante', style: AppType.title().copyWith(fontSize: 22)),
-          const SizedBox(height: 16),
-          // The photo the donor sent (private bucket: a link valid for 1 hour).
-          if (d.receiptPath case final path?) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: FutureBuilder<String>(
-                future: remote.receiptUrl(path),
-                builder: (context, snap) => snap.hasData
-                    ? Image.network(snap.data!, height: 320, fit: BoxFit.contain)
-                    : Container(
-                        height: 320,
-                        color: AppColors.cinza50,
-                        alignment: Alignment.center,
-                        child: snap.hasError
-                            ? Text('Não deu para abrir o comprovante.', style: AppType.body(size: 14))
-                            : const CircularProgressIndicator(color: AppColors.petroleo600),
-                      ),
+  /// Um cartão por mês, com as linhas separadas por fio — como nas listas
+  /// do iOS. O cabeçalho do mês fica fora do cartão.
+  List<Widget> _agrupado(Place p, List<Donation> lista) {
+    final meses = <String, List<Donation>>{};
+    for (final d in lista) {
+      meses.putIfAbsent('${d.date.year}-${d.date.month}', () => []).add(d);
+    }
+    final agora = DateTime.now();
+    final saida = <Widget>[];
+    for (final e in meses.entries) {
+      final primeira = e.value.first.date;
+      final mesmoAno = primeira.year == agora.year;
+      final titulo = '${Fmt.month(primeira)}${mesmoAno ? '' : ' de ${primeira.year}'}';
+      saida.addAll([
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  titulo[0].toUpperCase() + titulo.substring(1),
+                  style: AppType.label(color: AppColors.cinza700, size: 13.5).copyWith(fontWeight: FontWeight.w700),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.cinza50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cinza200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Pix enviado', style: AppType.body(size: 14)),
-                const SizedBox(height: 4),
-                Text(Fmt.money(d.amount), style: AppType.display(size: 30).copyWith(fontFeatures: tabular)),
-                const SizedBox(height: 14),
-                const Hairline(),
-                const SizedBox(height: 12),
-                _ReceiptLine('Data', '${Fmt.date(d.date)}, ${Fmt.hour(d.date.hour * 60 + d.date.minute)}'),
-                _ReceiptLine('De', d.donor),
-                _ReceiptLine('Para', place.payee ?? place.legalName),
-                _ReceiptLine('Chave', place.pixKey ?? ''),
+              Text(
+                '${e.value.length}',
+                style: AppType.body(size: 13).copyWith(fontFeatures: tabular),
+              ),
+            ],
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (final (i, d) in e.value.indexed) ...[
+                if (i > 0)
+                  const Padding(padding: EdgeInsets.only(left: 62), child: Hairline()),
+                _DonationRow(d: d, goal: store.goal(p, d.goalId)),
               ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          PrimaryButton(label: 'Entendi', icon: null, onPressed: () => Navigator.pop(context)),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final g = store.goal(place, d.goalId);
-    final pix = d.type == HelpType.pix;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              IconTile(icon: d.type.iconFill, color: d.type.color, size: 40),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      pix
-                          ? '${d.donor} registrou ${Fmt.money(d.amount)} via Pix em ${Fmt.day(d.date)}'
-                          : '${d.donor} vai levar ${_what(d, g)} até ${Fmt.day(d.when ?? d.date)}',
-                      style: AppType.label(
-                        color: AppColors.cinza900,
-                        size: 15,
-                      ).copyWith(fontWeight: FontWeight.w600, height: 1.35, fontFeatures: tabular),
-                    ),
-                    if (g != null) ...[
-                      const SizedBox(height: 3),
-                      Text('Meta: ${g.headline}', style: AppType.body(size: 13.5)),
-                    ],
-                    if (pix && d.receipt) ...[
-                      const SizedBox(height: 4),
-                      LinkText('Ver comprovante', size: 13.5, onTap: () => _receipt(context)),
-                    ],
-                  ],
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: SoftButton(
-                  label: 'Recebi',
-                  icon: PhosphorIconsBold.check,
-                  filled: true,
-                  expand: true,
-                  onTap: () => _received(context, g),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SoftButton(
-                  label: pix ? 'Não encontrei' : 'Não chegou',
-                  expand: true,
-                  onTap: () => _missing(context),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+        ),
+        const SizedBox(height: 18),
+      ]);
+    }
+    return saida;
   }
 }
 
-class _ReceiptLine extends StatelessWidget {
-  const _ReceiptLine(this.label, this.value);
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 60, child: Text(label, style: AppType.body(size: 14))),
-          Expanded(
-            child: Text(value, style: AppType.label(color: AppColors.cinza900, size: 14)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DoneTile extends StatelessWidget {
-  const _DoneTile({required this.d, required this.place});
+/// Uma doação da fila: a mesma linha das Recebidas, com o botão de
+/// confirmar num rodapé próprio. O botão ocupa a largura do cartão, então
+/// não disputa espaço com o valor nem fica boiando ao lado do texto.
+class _QueueCard extends StatelessWidget {
+  const _QueueCard({required this.d, required this.goal});
 
   final Donation d;
-  final Place place;
+  final Goal? goal;
 
   @override
   Widget build(BuildContext context) {
-    final g = store.goal(place, d.goalId);
-    final ok = d.status == DonationStatus.confirmed;
     return AppCard(
-      child: Row(
+      padding: EdgeInsets.zero,
+      child: Column(
         children: [
-          IconTile(icon: d.type.iconFill, color: d.type.color, size: 40),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          _DonationRow(d: d, goal: goal),
+          const Hairline(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: SoftButton(
+              label: 'Confirmar recebimento',
+              icon: PhosphorIconsBold.check,
+              filled: true,
+              expand: true,
+              height: 42,
+              onTap: () => confirmarRecebimento(context, d, goal),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pergunta e confirma. Fica fora das duas classes porque a fila e a tela
+/// da doação chamam a mesma coisa.
+Future<void> confirmarRecebimento(BuildContext context, Donation d, Goal? goal) async {
+  final valor = d.type == HelpType.pix ? Fmt.money(d.amount) : (goal?.amount(d.amount) ?? Fmt.count(d.amount));
+  final ok = await confirmSheet(
+    context,
+    icon: PhosphorIconsFill.checkCircle,
+    iconTone: Tone.success,
+    title: 'Confirmar o recebimento de $valor?',
+    text: 'A meta avança e ${d.donor} recebe um aviso.',
+    confirm: 'Confirmar recebimento',
+    cancel: 'Voltar',
+  );
+  if (ok == null || !context.mounted) return;
+  store.confirm(d);
+  Toast.show(
+    context,
+    goal == null
+        ? 'Recebimento confirmado.'
+        : 'Recebimento confirmado. A meta agora está em ${goal.progressLabel}.',
+  );
+}
+
+/// Uma linha da lista: inicial, quem doou, o que é, quanto, e para onde ir.
+class _DonationRow extends StatelessWidget {
+  const _DonationRow({required this.d, required this.goal});
+
+  final Donation d;
+  final Goal? goal;
+
+  /// Versão curta para a coluna da direita: "R$ 150,00", "5 kits", "2 vagas".
+  /// O nome do item fica no subtítulo, que tem a linha inteira.
+  String get _curto {
+    if (d.type == HelpType.pix) return Fmt.money(d.amount);
+    final n = Fmt.count(d.amount);
+    final unidade = goal?.unit;
+    if (d.type == HelpType.voluntariado) return d.amount == 1 ? '1 vaga' : '$n vagas';
+    if (unidade != null && unidade != 'unidades') return '$n $unidade';
+    // Sem unidade ("15 cestas básicas"), fica o número e a primeira palavra
+    // do item: um número solto na coluna não diz o que chegou.
+    final item = goal?.item.split(' ').first;
+    return item == null || item.isEmpty ? n : '$n $item';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final segunda = switch (d.status) {
+      DonationStatus.confirmed => 'Confirmada em ${Fmt.day(d.confirmedAt ?? d.date)}',
+      DonationStatus.notFound => 'Não encontrada',
+      _ when d.when != null && d.type == HelpType.itens =>
+        '${goal?.item ?? 'Itens'} · entrega em ${Fmt.day(d.when!)}',
+      _ => goal?.headline ?? 'Doação sem meta',
+    };
+    return Pressable(
+      onTap: () => context.push(DonationScreen(d.id)),
+      scale: .99,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Row(
+          children: [
+            _Avatar(name: d.donor, type: d.type),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          d.donor,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppType.label(
+                            color: AppColors.cinza900,
+                            size: 15.5,
+                          ).copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (d.receipt || d.receiptPath != null) ...[
+                        const SizedBox(width: 6),
+                        const Icon(PhosphorIconsRegular.paperclip, size: 14, color: AppColors.cinza500),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    segunda,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppType.body(
+                      size: 13,
+                      color: d.status == DonationStatus.notFound ? AppColors.cinza600 : AppColors.cinza600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${d.donor} · ${_what(d, g)}',
-                  style: AppType.label(color: AppColors.cinza900, size: 15).copyWith(fontFeatures: tabular),
+                  _curto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppType.label(
+                    color: d.status == DonationStatus.notFound ? AppColors.cinza500 : AppColors.cinza900,
+                    size: 15.5,
+                  ).copyWith(fontWeight: FontWeight.w700, fontFeatures: tabular),
                 ),
-                const SizedBox(height: 6),
-                StatusTag(
-                  ok ? 'Confirmada em ${Fmt.day(d.confirmedAt ?? d.date)}' : 'Não encontrada',
-                  tone: ok ? Tone.success : Tone.neutral,
-                ),
+                const SizedBox(height: 2),
+                Text(Fmt.day(d.date), style: AppType.body(size: 12.5).copyWith(fontFeatures: tabular)),
               ],
+            ),
+            const SizedBox(width: 6),
+            const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza400),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Inicial de quem doou, com um selo do tipo de ajuda no canto. Cor e
+/// ícone juntos, como o style guide pede.
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.name, required this.type});
+
+  final String name;
+  final HelpType type;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(color: AppColors.cinza100, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: Text(
+              name.isEmpty ? '?' : name[0].toUpperCase(),
+              style: AppType.cardTitle(size: 16, color: AppColors.cinza700),
+            ),
+          ),
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: Container(
+              width: 17,
+              height: 17,
+              decoration: BoxDecoration(
+                color: type.color,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.white, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Icon(type.iconFill, size: 9, color: AppColors.white),
             ),
           ),
         ],
@@ -325,7 +426,7 @@ class _Volunteers extends StatefulWidget {
 }
 
 class _VolunteersState extends State<_Volunteers> {
-  /// Presence being marked, per action: donation id → came.
+  /// Presença sendo marcada, por ação: id da doação → veio.
   final _presence = <String, Map<String, bool>>{};
 
   Future<void> _cancel(Goal g, int n) async {
@@ -411,9 +512,13 @@ class _VolunteersState extends State<_Volunteers> {
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      '${d.donor} · inscrito em ${Fmt.day(d.date)}',
-                      style: AppType.body(size: 14.5, color: AppColors.cinza800),
+                    child: Pressable(
+                      onTap: () => context.push(DonationScreen(d.id)),
+                      scale: .99,
+                      child: Text(
+                        '${d.donor} · inscrito em ${Fmt.day(d.date)}',
+                        style: AppType.body(size: 14.5, color: AppColors.cinza800),
+                      ),
                     ),
                   ),
                   if (ended && d.status == DonationStatus.enrolled) ...[

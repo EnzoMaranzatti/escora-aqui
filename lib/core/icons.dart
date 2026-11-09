@@ -17,14 +17,17 @@ abstract final class PhosphorIconsRegular {
   static const calendarDots = IconData(0xe7b4, fontFamily: 'PhosphorRegular');
   static const camera = IconData(0xe10e, fontFamily: 'PhosphorRegular');
   static const caretRight = IconData(0xe13a, fontFamily: 'PhosphorRegular');
+  static const chartBar = IconData(0xe150, fontFamily: 'PhosphorRegular');
   static const clipboardText = IconData(0xe198, fontFamily: 'PhosphorRegular');
   static const clock = IconData(0xe19a, fontFamily: 'PhosphorRegular');
   static const clockCounterClockwise = IconData(0xe1a0, fontFamily: 'PhosphorRegular');
   static const coins = IconData(0xe78e, fontFamily: 'PhosphorRegular');
   static const copy = IconData(0xe1ca, fontFamily: 'PhosphorRegular');
+  static const envelope = IconData(0xe214, fontFamily: 'PhosphorRegular');
   static const fileText = IconData(0xe23a, fontFamily: 'PhosphorRegular');
   static const flag = IconData(0xe244, fontFamily: 'PhosphorRegular');
   static const funnelSimpleX = IconData(0xe26a, fontFamily: 'PhosphorRegular');
+  static const gift = IconData(0xe276, fontFamily: 'PhosphorRegular');
   static const handshake = IconData(0xe582, fontFamily: 'PhosphorRegular');
   static const hourglassMedium = IconData(0xe2b8, fontFamily: 'PhosphorRegular');
   static const identificationCard = IconData(0xe2c8, fontFamily: 'PhosphorRegular');
@@ -53,10 +56,14 @@ abstract final class PhosphorIconsRegular {
   static const storefront = IconData(0xe470, fontFamily: 'PhosphorRegular');
   static const tag = IconData(0xe478, fontFamily: 'PhosphorRegular');
   static const target = IconData(0xe47c, fontFamily: 'PhosphorRegular');
+  static const ticket = IconData(0xe490, fontFamily: 'PhosphorRegular');
   static const trash = IconData(0xe4a6, fontFamily: 'PhosphorRegular');
   static const tray = IconData(0xe4aa, fontFamily: 'PhosphorRegular');
+  static const trendDown = IconData(0xe4ac, fontFamily: 'PhosphorRegular');
+  static const trendUp = IconData(0xe4ae, fontFamily: 'PhosphorRegular');
   static const userCircle = IconData(0xe4c4, fontFamily: 'PhosphorRegular');
   static const usersThree = IconData(0xe68e, fontFamily: 'PhosphorRegular');
+  static const whatsappLogo = IconData(0xe5d0, fontFamily: 'PhosphorRegular');
   static const wifiSlash = IconData(0xe4f2, fontFamily: 'PhosphorRegular');
   static const x = IconData(0xe4f6, fontFamily: 'PhosphorRegular');
 }
@@ -71,12 +78,16 @@ abstract final class PhosphorIconsFill {
   static const clipboardText = IconData(0xe198, fontFamily: 'PhosphorFill');
   static const clock = IconData(0xe19a, fontFamily: 'PhosphorFill');
   static const coins = IconData(0xe78e, fontFamily: 'PhosphorFill');
+  static const crown = IconData(0xe614, fontFamily: 'PhosphorFill');
+  static const fire = IconData(0xe242, fontFamily: 'PhosphorFill');
   static const flag = IconData(0xe244, fontFamily: 'PhosphorFill');
+  static const gift = IconData(0xe276, fontFamily: 'PhosphorFill');
   static const hourglassLow = IconData(0xe2b6, fontFamily: 'PhosphorFill');
   static const info = IconData(0xe2ce, fontFamily: 'PhosphorFill');
   static const mapPin = IconData(0xe316, fontFamily: 'PhosphorFill');
   static const mapPinArea = IconData(0xee3a, fontFamily: 'PhosphorFill');
   static const mapTrifold = IconData(0xe31a, fontFamily: 'PhosphorFill');
+  static const medal = IconData(0xe320, fontFamily: 'PhosphorFill');
   static const navigationArrow = IconData(0xeade, fontFamily: 'PhosphorFill');
   static const package = IconData(0xe390, fontFamily: 'PhosphorFill');
   static const pauseCircle = IconData(0xe3a0, fontFamily: 'PhosphorFill');
@@ -89,6 +100,7 @@ abstract final class PhosphorIconsFill {
   static const star = IconData(0xe46a, fontFamily: 'PhosphorFill');
   static const storefront = IconData(0xe470, fontFamily: 'PhosphorFill');
   static const target = IconData(0xe47c, fontFamily: 'PhosphorFill');
+  static const ticket = IconData(0xe490, fontFamily: 'PhosphorFill');
   static const tray = IconData(0xe4aa, fontFamily: 'PhosphorFill');
   static const userCircle = IconData(0xe4c4, fontFamily: 'PhosphorFill');
   static const usersThree = IconData(0xe68e, fontFamily: 'PhosphorFill');

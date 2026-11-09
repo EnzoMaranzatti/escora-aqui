@@ -39,6 +39,8 @@ flutter:
     - assets/icons/
     - assets/images/
     - assets/images/places/
+    - assets/images/levels/
+    - assets/images/partners/
     - assets/shapes/
     - assets/map/
 

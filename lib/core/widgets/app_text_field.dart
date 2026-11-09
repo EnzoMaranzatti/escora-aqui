@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../icons.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_typography.dart';
@@ -194,6 +195,122 @@ class _AppTextFieldState extends State<AppTextField> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// Campo de busca de uma linha: lupa à esquerda, "x" quando tem texto.
+/// Mora no topo de listas longas (doações), por isso é mais baixo e
+/// arredondado que o AppTextField de formulário.
+class AppSearchField extends StatefulWidget {
+  const AppSearchField({
+    super.key,
+    required this.hint,
+    required this.onChanged,
+    this.controller,
+    this.semantic,
+  });
+
+  final String hint;
+  final ValueChanged<String> onChanged;
+  final TextEditingController? controller;
+
+  /// Lido pelo leitor de tela no lugar da dica.
+  final String? semantic;
+
+  @override
+  State<AppSearchField> createState() => _AppSearchFieldState();
+}
+
+class _AppSearchFieldState extends State<AppSearchField> {
+  late final TextEditingController _ctrl = widget.controller ?? TextEditingController();
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    if (widget.controller == null) _ctrl.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  void _clear() {
+    _ctrl.clear();
+    widget.onChanged('');
+    _focus.unfocus();
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final focused = _focus.hasFocus;
+    return Semantics(
+      textField: true,
+      label: widget.semantic ?? widget.hint,
+      child: AnimatedContainer(
+        duration: AppMotion.medium,
+        curve: AppMotion.smooth,
+        height: 46,
+        decoration: BoxDecoration(
+          color: focused ? AppColors.white : AppColors.cinza100,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: focused ? AppColors.petroleo600 : AppColors.cinza200,
+            width: focused ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 13),
+            Icon(
+              PhosphorIconsRegular.magnifyingGlass,
+              size: 19,
+              color: focused ? AppColors.petroleo600 : AppColors.cinza500,
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                focusNode: _focus,
+                textInputAction: TextInputAction.search,
+                onChanged: (v) {
+                  widget.onChanged(v);
+                  setState(() {});
+                },
+                cursorColor: AppColors.petroleo600,
+                style: AppType.body(color: AppColors.cinza900, size: 15.5),
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: widget.hint,
+                  hintStyle: AppType.body(color: AppColors.cinza500, size: 15.5),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            if (_ctrl.text.isNotEmpty)
+              Semantics(
+                button: true,
+                label: 'Limpar a busca',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _clear,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(PhosphorIconsRegular.x, size: 17, color: AppColors.cinza600),
+                  ),
+                ),
+              )
+            else
+              const SizedBox(width: 13),
+          ],
+        ),
+      ),
     );
   }
 }

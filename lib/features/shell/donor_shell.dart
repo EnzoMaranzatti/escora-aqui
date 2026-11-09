@@ -6,11 +6,19 @@ import '../../data/store.dart';
 import '../donations/donations_screen.dart';
 import '../home/home_screen.dart';
 import '../notices/notices_screen.dart';
+import '../points/points_screen.dart';
 import '../profile/profile_screen.dart';
 
 /// Current donor tab. Flows that end elsewhere ("Ver minhas doações")
 /// set it after popping back to the shell.
 final donorTab = ValueNotifier<int>(0);
+
+/// Tab positions in the bar below, for whoever sends the person to one.
+const mapTab = 0;
+const donationsTab = 1;
+const pointsTab = 2;
+const noticesTab = 3;
+const profileTab = 4;
 
 /// Closes any open flow and shows a donor tab.
 void goToTab(BuildContext context, int tab) {
@@ -18,8 +26,8 @@ void goToTab(BuildContext context, int tab) {
   donorTab.value = tab;
 }
 
-/// Main screens of the donor: Mapa · Doações · Avisos · Perfil. The bar
-/// hides inside task flows (they are pushed above the shell).
+/// Main screens of the donor: Mapa · Doações · Pontos · Avisos · Perfil. The
+/// bar hides inside task flows (they are pushed above the shell).
 class DonorShell extends StatefulWidget {
   const DonorShell({super.key});
 
@@ -47,13 +55,13 @@ class _DonorShellState extends State<DonorShell> {
   }
 
   void _onTab() {
-    if (donorTab.value == 2) _seen = DateTime.now();
+    if (donorTab.value == noticesTab) _seen = DateTime.now();
     setState(() {});
   }
 
   void _onStore() {
     if (!mounted) return;
-    if (donorTab.value == 2) _seen = DateTime.now();
+    if (donorTab.value == noticesTab) _seen = DateTime.now();
     setState(() {});
   }
 
@@ -62,7 +70,7 @@ class _DonorShellState extends State<DonorShell> {
     final badge = store.notices.where((n) => !n.read && n.date.isAfter(_seen)).length;
     return TabShell(
       index: donorTab.value,
-      pages: const [HomeScreen(), DonationsScreen(), NoticesScreen(), ProfileScreen()],
+      pages: const [HomeScreen(), DonationsScreen(), PointsScreen(), NoticesScreen(), ProfileScreen()],
       bar: AppNavBar(
         index: donorTab.value,
         onTap: (i) => donorTab.value = i,
@@ -78,6 +86,12 @@ class _DonorShellState extends State<DonorShell> {
             semantic: 'Minhas doações',
             icon: PhosphorIconsRegular.receipt,
             activeIcon: PhosphorIconsFill.receipt,
+          ),
+          const NavItem(
+            label: 'Pontos',
+            semantic: 'Meus pontos e cupons',
+            icon: PhosphorIconsRegular.coins,
+            activeIcon: PhosphorIconsFill.coins,
           ),
           NavItem(
             label: 'Avisos',

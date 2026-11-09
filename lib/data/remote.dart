@@ -1,12 +1,13 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'models.dart';
 
-// Conversa com as tabelas do Supabase (fases 3 a 8). O store.dart chama
+// Conversa com as tabelas do Supabase (fases 3 a 9). O store.dart chama
 // estas funções; as telas continuam lendo só o store.
 //
 // Os nomes no banco são snake_case e os do Dart, camelCase:
@@ -57,6 +58,11 @@ class Snapshot {
     required this.notices,
     required this.queue,
     required this.reports,
+    required this.points,
+    required this.pointsEntries,
+    required this.catalog,
+    required this.redemptions,
+    required this.myPartner,
   });
 
   final List<Place> places;
@@ -67,6 +73,15 @@ class Snapshot {
   final List<Notice> notices;
   final List<Submission> queue;
   final List<Report> reports;
+
+  /// Fase 9: saldo e nível da pessoa, o extrato e o catálogo de parceiros.
+  final PointsProfile? points;
+  final List<PointsEntry> pointsEntries;
+  final List<CatalogItem> catalog;
+  final List<Redemption> redemptions;
+
+  /// Fase 10: a empresa que esta conta administra, se for a de um parceiro.
+  final Partner? myPartner;
 }
 
 Future<Snapshot> loadAll({required LatLng center, required bool isTeam}) async {
@@ -96,6 +111,40 @@ Future<Snapshot> loadAll({required LatLng center, required bool isTeam}) async {
       .order('created_at', ascending: false)
       .limit(100);
   final ratedRows = await _db.from('reviews').select('donation_id').eq('author_id', uid);
+
+  // Fase 9: pontos. O perfil é uma linha só; o extrato, as últimas 50.
+  // Enquanto a migração da fase 9 não estiver no banco, essas tabelas não
+  // existem. O erro para aqui: a aba Pontos fica vazia, e o mapa, as doações e
+  // os avisos carregam normalmente.
+  Map<String, dynamic>? pointsRow;
+  List<Map<String, dynamic>> ledgerRows = const [];
+  List<Map<String, dynamic>> partnerRows = const [];
+  List<Map<String, dynamic>> itemRows = const [];
+  List<Map<String, dynamic>> redemptionRows = const [];
+  try {
+    pointsRow = await _db.from('points_profiles').select().eq('user_id', uid).maybeSingle();
+    ledgerRows = await _db
+        .from('points_ledger')
+        .select()
+        .eq('user_id', uid)
+        .order('created_at', ascending: false)
+        .limit(50);
+    partnerRows = await _db.from('partners').select();
+    itemRows = await _db.from('catalog_items').select();
+    redemptionRows = await _db.from('redemptions').select().eq('user_id', uid).order('redeemed_at', ascending: false);
+  } catch (e) {
+    debugPrint('remote: fase 9 (pontos) indisponível: $e');
+  }
+
+  // Fase 10: a conta é de um parceiro? A coluna owner_id só existe depois
+  // da migração da fase 10, então este try é separado do de cima — sem ele,
+  // uma conta de doador num banco antigo perderia o catálogo inteiro.
+  Map<String, dynamic>? myPartnerRow;
+  try {
+    myPartnerRow = await _db.from('partners').select().eq('owner_id', uid).maybeSingle();
+  } catch (e) {
+    debugPrint('remote: fase 10 (parceiro) indisponível: $e');
+  }
 
   // Pontos que a pessoa segue ou ajudou e que ficam além dos 50 km.
   final missing = {
@@ -197,6 +246,15 @@ Future<Snapshot> loadAll({required LatLng center, required bool isTeam}) async {
     }
   }
 
+  // Catálogo: parceiros e itens vêm em consultas separadas e são juntados
+  // aqui pelo id, como o resto do arquivo faz.
+  final partners = {
+    for (final r in partnerRows)
+      r['id'] as String: Partner(id: r['id'] as String, name: r['name'] as String, logo: r['logo_path'] as String?),
+  };
+  final catalog = [for (final r in itemRows) _catalogItem(r, partners)];
+  final items = {for (final i in catalog) i.id: i};
+
   return Snapshot(
     places: places,
     myPointId: myPointId,
@@ -206,8 +264,16 @@ Future<Snapshot> loadAll({required LatLng center, required bool isTeam}) async {
     notices: [for (final r in noticeRows) _notice(r)],
     queue: queue,
     reports: reports,
+    points: pointsRow == null ? null : _points(pointsRow),
+    pointsEntries: [for (final r in ledgerRows) _pointsEntry(r)],
+    catalog: catalog,
+    redemptions: [for (final r in redemptionRows) _redemption(r, items)],
+    myPartner: myPartnerRow == null ? null : _partner(myPartnerRow),
   );
 }
+
+Partner _partner(Map<String, dynamic> r) =>
+    Partner(id: r['id'] as String, name: r['name'] as String, logo: r['logo_path'] as String?);
 
 Place _place(Map<String, dynamic> r) {
   final lat = r['lat'] as num?;
@@ -286,6 +352,7 @@ Donation _donation(Map<String, dynamic> r, String uid, Set<String> rated) => Don
   amount: _num(r['amount']),
   date: _time(r['created_at'])!,
   donor: r['donor_name'] as String,
+  donorId: r['donor_id'] as String?,
   mine: r['donor_id'] == uid,
   when: r['scheduled_for'] == null ? null : _date(r['scheduled_for']),
   receiptPath: r['receipt_path'] as String?,
@@ -313,6 +380,50 @@ Notice _notice(Map<String, dynamic> r) => Notice(
   placeId: r['place_id'] as String?,
   read: r['read'] as bool,
 );
+
+PointsProfile _points(Map<String, dynamic> r) => PointsProfile(
+  balance: r['balance'] as int,
+  lifetime: r['lifetime'] as int,
+  level: PointsLevel.values.byName(r['level'] as String),
+  qualifyingDonations: r['qualifying_donations'] as int,
+  itemsDonated: r['items_donated'] as int,
+  loginStreakDays: r['login_streak_days'] as int,
+  donationStreakMonths: r['donation_streak_months'] as int,
+  loginLastDate: r['login_last_date'] == null ? null : _date(r['login_last_date']),
+  donationLastAt: _time(r['donation_last_at']),
+);
+
+PointsEntry _pointsEntry(Map<String, dynamic> r) => PointsEntry(
+  id: r['id'] as String,
+  amount: r['amount'] as int,
+  reason: _enum(PointsReason.values, r['reason'] as String),
+  note: r['note'] as String,
+  date: _time(r['created_at'])!,
+);
+
+CatalogItem _catalogItem(Map<String, dynamic> r, Map<String, Partner> partners) => CatalogItem(
+  id: r['id'] as String,
+  partner: partners[r['partner_id']]!,
+  title: r['title'] as String,
+  description: r['description'] as String,
+  cost: r['points_cost'] as int,
+  minLevel: PointsLevel.values.byName(r['min_level'] as String),
+  stock: r['stock'] as int?,
+  active: r['active'] as bool,
+  photoPath: r['photo_path'] as String?,
+);
+
+Redemption _redemption(Map<String, dynamic> r, Map<String, CatalogItem> items) {
+  final item = items[r['catalog_item_id']];
+  return Redemption(
+    id: r['id'] as String,
+    title: item?.title ?? '',
+    partnerName: item?.partner.name ?? '',
+    points: r['points_spent'] as int,
+    code: r['code'] as String,
+    date: _time(r['redeemed_at'])!,
+  );
+}
 
 // ── Tempo real ───────────────────────────────────────────────
 
@@ -568,5 +679,77 @@ Future<void> deleteMyFiles() async {
 
 Future<void> deleteAccount() => _db.rpc('delete_account');
 
+// ── Pontos (fase 9) ──────────────────────────────────────────
+
+/// Pontos do dia. O banco decide quanto vale (e não pontua duas vezes no
+/// mesmo dia), então pode ser chamada em toda sessão.
+Future<void> registerDailyLogin() => _db.rpc('register_daily_login');
+
+/// Troca pontos por um cupom. O banco confere nível, estoque e saldo.
+Future<void> redeemCatalogItem(String itemId) => _db.rpc('redeem_catalog_item', params: {'item': itemId});
+
+// ── Parceiro (fase 10) ───────────────────────────────────────
+
+/// Os cupons da empresa, com quantos saíram e quantos já tiveram baixa.
+/// O banco filtra pelo parceiro de quem chamou (partner_catalog).
+Future<List<PartnerCoupon>> partnerCatalog() async {
+  final rows = (await _db.rpc('partner_catalog') as List).cast<Map<String, dynamic>>();
+  return [
+    for (final r in rows)
+      PartnerCoupon(
+        id: r['id'] as String,
+        title: r['title'] as String,
+        description: r['description'] as String,
+        cost: r['points_cost'] as int,
+        minLevel: PointsLevel.values.byName(r['min_level'] as String),
+        redeemed: (r['redeemed'] as num).toInt(),
+        used: (r['used'] as num).toInt(),
+        stock: r['stock'] as int?,
+        active: r['active'] as bool,
+        photoPath: r['photo_path'] as String?,
+      ),
+  ];
+}
+
+/// Procura um cupom pelo código. O banco recusa (RAISE EXCEPTION, com a
+/// mensagem já em português) quando o código não é desta empresa.
+Future<CouponLookup> partnerFindRedemption(String code) async {
+  final rows = (await _db.rpc('partner_find_redemption', params: {'p_code': code}) as List)
+      .cast<Map<String, dynamic>>();
+  final r = rows.first;
+  return CouponLookup(
+    code: r['code'] as String,
+    title: r['title'] as String,
+    points: r['points_spent'] as int,
+    date: _time(r['redeemed_at'])!,
+    donorName: (r['donor_name'] as String?) ?? '',
+    usedAt: _time(r['used_at']),
+  );
+}
+
+/// Dá baixa no cupom e devolve a hora gravada. O banco recusa quando o
+/// cupom já tinha sido usado ou não é desta empresa.
+Future<DateTime> partnerUseRedemption(String code) async =>
+    _time(await _db.rpc('partner_use_redemption', params: {'p_code': code}))!;
+
 /// "awaitingIndication" → "awaiting_indication" (para quem precisar do nome no banco).
 String dbName(Enum e) => _snake(e.name);
+
+// ── Fase 11: contato de quem doou ───────────────────────────
+// Só responde para o dono do ponto que recebeu a doação; a checagem é da
+// função no banco, não daqui.
+Future<DonorContact?> donorContact(String donationId) async {
+  final rows = await _db.rpc('place_donor_contact', params: {'p_donation': donationId});
+  final list = (rows as List).cast<Map<String, dynamic>>();
+  if (list.isEmpty) return null;
+  final r = list.first;
+  return DonorContact(
+    name: (r['full_name'] as String?) ?? (r['first_name'] as String? ?? ''),
+    firstName: r['first_name'] as String? ?? '',
+    phone: r['phone'] as String?,
+    email: r['email'] as String?,
+    city: r['city'] as String?,
+    uf: r['uf'] as String?,
+    since: _time(r['since']),
+  );
+}

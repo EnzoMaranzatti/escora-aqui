@@ -232,10 +232,14 @@ abstract final class Toast {
     String text, {
     IconData icon = PhosphorIconsFill.checkCircle,
     Duration duration = const Duration(seconds: 3),
+    OverlayState? into,
   }) {
     _timer?.cancel();
     _entry?.remove();
-    final overlay = Overlay.of(context, rootOverlay: true);
+    // `Overlay.of` procura um overlay **acima** do contexto, e o contexto
+    // do próprio overlay raiz não tem nenhum: quem avisa de fora das telas
+    // (main.dart) passa o overlay direto em `into`.
+    final overlay = into ?? Overlay.of(context, rootOverlay: true);
     final key = GlobalKey<_ToastViewState>();
     final entry = OverlayEntry(
       builder: (_) => _ToastView(key: key, text: text, icon: icon),

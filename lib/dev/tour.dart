@@ -10,10 +10,13 @@ import '../features/donate/monthly_screen.dart';
 import '../features/donate/pix_screen.dart';
 import '../features/donate/registered_screen.dart';
 import '../features/donate/volunteer_screen.dart';
+import '../features/institution/donation_screen.dart';
 import '../features/institution/donations_inbox_screen.dart';
 import '../features/institution/goal_flow.dart';
 import '../features/institution/institution_shell.dart';
 import '../features/institution/register/register_flow.dart';
+import '../features/auth/partner_login_screen.dart';
+import '../features/partner/partner_shell.dart';
 import '../features/place/place_screen.dart';
 import '../features/profile/edit_profile_screen.dart';
 import '../features/place/report_screen.dart';
@@ -64,16 +67,19 @@ class _TourScreenState extends State<TourScreen> {
   void _open(String name) {
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
-    final p = store.place('casa-exemplo');
+    // Com os dados reais do banco o ponto de demonstração não existe; as
+    // telas que dependem dele caem no primeiro ponto carregado.
+    final p = store.placeOrNull('casa-exemplo') ?? store.places.firstOrNull;
+    if (p == null && name != 'inst' && !name.startsWith('inst-')) return;
     Widget? push;
     switch (name) {
-      case 'map' || 'donations' || 'notices' || 'profile':
+      case 'map' || 'donations' || 'points' || 'notices' || 'profile':
         store.setMode(AppMode.donor);
-        donorTab.value = ['map', 'donations', 'notices', 'profile'].indexOf(name);
+        donorTab.value = ['map', 'donations', 'points', 'notices', 'profile'].indexOf(name);
         setState(() => _root = 'donor');
       case 'place':
         setState(() => _root = 'donor');
-        push = PlaceScreen(placeId: p.id);
+        push = PlaceScreen(placeId: p!.id);
       case 'place-empty':
         setState(() => _root = 'donor');
         push = const PlaceScreen(placeId: 'vila-nova');
@@ -85,7 +91,7 @@ class _TourScreenState extends State<TourScreen> {
       case 'declare':
         push = DeclareScreen(placeId: 'santo-dumont', goalId: 'g3');
       case 'items':
-        push = ItemsScreen(placeId: p.id, goalId: 'g1');
+        push = ItemsScreen(placeId: p!.id, goalId: 'g1');
       case 'volunteer':
         push = const VolunteerScreen(placeId: 'liberal', goalId: 'g4');
       case 'done':
@@ -107,10 +113,10 @@ class _TourScreenState extends State<TourScreen> {
         donorTab.value = 0;
         setState(() => _root = 'donor');
       case 'report':
-        push = ReportScreen(placeId: p.id);
+        push = ReportScreen(placeId: p!.id);
       case 'verified':
         setState(() => _root = 'donor');
-        push = PlaceScreen(placeId: p.id);
+        push = PlaceScreen(placeId: p!.id);
         Future.delayed(const Duration(milliseconds: 900), () {
           if (mounted) showVerifiedSheet(nav.context, p);
         });
@@ -139,21 +145,57 @@ class _TourScreenState extends State<TourScreen> {
           ..payee = 'Associação Cozinha Comunitária Vila Nova'
           ..accepts.addAll({HelpType.pix, HelpType.itens});
         WidgetsBinding.instance.addPostFrameCallback((_) => openRegister(nav.context));
-      case 'inst' || 'inst-goals' || 'inst-inbox' || 'inst-vol' || 'inst-point':
+      case 'inst' ||
+          'inst-goals' ||
+          'inst-inbox' ||
+          'inst-done' ||
+          'inst-vol' ||
+          'inst-summary' ||
+          'inst-point':
         store.setMode(AppMode.institution);
         setState(() => _root = 'inst');
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          inboxTab.value = name == 'inst-vol' ? 2 : 0;
+          inboxTab.value = switch (name) {
+            'inst-done' => 1,
+            'inst-vol' => 2,
+            'inst-summary' => 3,
+            _ => 0,
+          };
           institutionTab.value = switch (name) {
             'inst-goals' => 1,
-            'inst-inbox' || 'inst-vol' => 2,
+            'inst-inbox' || 'inst-done' || 'inst-vol' || 'inst-summary' => 2,
             'inst-point' => 3,
             _ => 0,
           };
         });
+      // Uma doação aberta: a primeira da fila, ou a mais recente se a fila
+      // estiver vazia.
+      case 'inst-donation' || 'inst-donation-done':
+        store.setMode(AppMode.institution);
+        setState(() => _root = 'inst');
+        final mine = store.myPoint;
+        if (mine != null) {
+          final list = store.incoming(mine);
+          final alvo = name == 'inst-donation'
+              ? list.where((d) => d.status == DonationStatus.waiting).lastOrNull
+              : list.where((d) => d.status == DonationStatus.confirmed).firstOrNull;
+          if (alvo != null) push = DonationScreen(alvo.id);
+        }
       case 'goal':
         setState(() => _root = 'inst');
         push = const GoalFlow();
+      // Modo parceiro. Sem a fase 10 no banco não há empresa ligada à
+      // conta, então o tour inventa uma só para a foto sair.
+      case 'partner-login':
+        setState(() => _root = 'donor');
+        push = const PartnerLoginScreen();
+      case 'partner' || 'partner-coupons' || 'partner-found':
+        _fakePartner();
+        store.setMode(AppMode.partner);
+        setState(() => _root = 'partner');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          partnerTab.value = name == 'partner-coupons' ? 1 : 0;
+        });
       case 'team' || 'team-review':
         store.setMode(AppMode.team);
         setState(() => _root = 'team');
@@ -165,6 +207,37 @@ class _TourScreenState extends State<TourScreen> {
     }
   }
 
+  /// Empresa e cupons de mentira, para o modo parceiro aparecer mesmo com
+  /// a fase 10 fora do banco. Não escreve nada: é só memória.
+  void _fakePartner() {
+    if (store.myPartner != null && store.partnerCoupons.isNotEmpty) return;
+    store.myPartner ??= const Partner(id: 'demo-parceiro', name: 'Livraria Beira de Página');
+    if (store.partnerCoupons.isEmpty) {
+      store.partnerCoupons.addAll([
+        const PartnerCoupon(
+          id: 'demo-1',
+          title: 'R\$ 20 de desconto em livros',
+          description: 'Vale uma vez por pessoa, em qualquer livro da loja.',
+          cost: 120,
+          minLevel: PointsLevel.bronze,
+          redeemed: 6,
+          used: 3,
+          stock: 14,
+        ),
+        const PartnerCoupon(
+          id: 'demo-2',
+          title: 'Café com bolo na cafeteria',
+          description: 'Para quem passa a tarde lendo lá.',
+          cost: 80,
+          minLevel: PointsLevel.prata,
+          redeemed: 4,
+          used: 4,
+          stock: 6,
+        ),
+      ]);
+    }
+  }
+
   String _root = 'donor';
 
   @override
@@ -172,6 +245,18 @@ class _TourScreenState extends State<TourScreen> {
     return switch (_root) {
       'inst' => const InstitutionShell(),
       'team' => const TeamShell(),
+      'partner' => PartnerShell(
+        key: ValueKey(_current),
+        demo: _current == 'partner-found'
+            ? CouponLookup(
+                code: 'ESC-D6611B',
+                title: 'R\$ 20 de desconto em livros',
+                points: 120,
+                date: DateTime.now().subtract(const Duration(days: 2)),
+                donorName: 'Camila',
+              )
+            : null,
+      ),
       _ => const DonorShell(),
     };
   }

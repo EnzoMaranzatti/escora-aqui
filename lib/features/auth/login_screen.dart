@@ -20,6 +20,7 @@ import '../../core/widgets/segment_progress.dart';
 import '../../core/widgets/sheets.dart';
 import '../../data/auth.dart';
 import '../shell/donor_shell.dart';
+import 'partner_login_screen.dart';
 import '../intro/intro_screen.dart';
 import 'reset_password_screen.dart';
 
@@ -123,6 +124,28 @@ class _LoginScreenState extends State<LoginScreen> {
                             GhostButton(
                               label: 'Ainda não tem conta? Começar',
                               onPressed: () => context.replaceAll(const IntroScreen()),
+                            ),
+                            const SizedBox(height: 4),
+                            Pressable(
+                              onTap: () => context.push(const PartnerLoginScreen()),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      PhosphorIconsRegular.storefront,
+                                      size: 18,
+                                      color: AppColors.cinza600,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Sou parceiro',
+                                      style: AppType.label(size: 14, color: AppColors.cinza600),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ],
                         ),

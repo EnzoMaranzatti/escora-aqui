@@ -38,7 +38,7 @@ class _TeamShellState extends State<TeamShell> {
 
   void _exit() {
     store.setMode(AppMode.donor);
-    donorTab.value = 3;
+    donorTab.value = profileTab;
     context.replaceAll(const DonorShell());
   }
 

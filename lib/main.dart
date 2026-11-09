@@ -12,13 +12,16 @@ import 'core/theme/app_colors.dart';
 import 'dev/showreel.dart';
 import 'dev/tour.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/partner_login_screen.dart';
 import 'features/auth/reset_password_screen.dart';
 import 'data/auth.dart';
 import 'data/store.dart';
 import 'features/institution/institution_shell.dart';
+import 'features/partner/partner_shell.dart';
 import 'features/shell/donor_shell.dart';
 import 'features/team/team_shell.dart';
 import 'features/intro/intro_screen.dart';
+import 'features/points/level_up_sheet.dart';
 import 'features/signup/account_intro_screen.dart';
 import 'features/signup/causes_screen.dart';
 import 'features/signup/create_account_screen.dart';
@@ -40,6 +43,10 @@ Future<void> main() async {
   if (loggedIn) await store.init().timeout(const Duration(seconds: 10), onTimeout: () {});
   // Quando o banco recusa uma ação, a mensagem aparece como aviso.
   store.errors.stream.listen(_showError);
+  // Fase 9: o banco disse que a pessoa subiu de nível, ou que entraram
+  // pontos com o app aberto.
+  store.levelUps.stream.listen(_showLevelUp);
+  store.pointsGained.stream.listen(_showPointsGained);
   // O link de "Esqueci minha senha" abre o app na tela de senha nova.
   ouvirLinkDeSenha(abrirSenhaNova: _openNewPassword, linkInvalido: _invalidResetLink);
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -63,7 +70,37 @@ void _openNewPassword() {
 void _showError(String message) {
   final nav = _navigator.currentState;
   if (nav == null) return;
-  Toast.show(nav.overlay!.context, message, icon: PhosphorIconsFill.warningCircle, duration: const Duration(seconds: 5));
+  Toast.show(
+    nav.overlay!.context,
+    message,
+    into: nav.overlay,
+    icon: PhosphorIconsFill.warningCircle,
+    duration: const Duration(seconds: 5),
+  );
+}
+
+/// Quando a comemoração de nível abriu pela última vez. Os dois streams
+/// saem da mesma carga do banco: numa doação que sobe de nível, o nível
+/// chega junto com os pontos, e aí o aviso curto só atrapalharia.
+DateTime _levelUpAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+void _showLevelUp(PointsLevel level) {
+  final nav = _navigator.currentState;
+  if (nav == null) return;
+  _levelUpAt = DateTime.now();
+  showLevelUp(nav.context, level);
+}
+
+void _showPointsGained(int amount) {
+  final nav = _navigator.currentState;
+  if (nav == null || amount <= 0) return;
+  if (DateTime.now().difference(_levelUpAt) < const Duration(seconds: 2)) return;
+  Toast.show(
+    nav.overlay!.context,
+    '+$amount ${amount == 1 ? 'ponto' : 'pontos'}',
+    into: nav.overlay,
+    icon: PhosphorIconsFill.star,
+  );
 }
 
 void _invalidResetLink() {
@@ -75,6 +112,7 @@ void _invalidResetLink() {
   Toast.show(
     nav.overlay!.context,
     'Esse link não vale mais. Peça um novo em "Esqueci minha senha".',
+    into: nav.overlay,
     icon: PhosphorIconsFill.warningCircle,
     duration: const Duration(seconds: 5),
   );
@@ -129,7 +167,15 @@ class EscoraApp extends StatelessWidget {
 /// underneath, so "Voltar" still works.
 List<Widget> _startStack(bool loggedIn) {
   const start = String.fromEnvironment('START');
-  if (start.isEmpty) return [loggedIn ? const DonorShell() : const SplashScreen()];
+  if (start.isEmpty) {
+    if (!loggedIn) return [const SplashScreen()];
+    // Conta de parceiro abre no balcão: é a única coisa que ela faz aqui.
+    if (store.myPartner != null) {
+      store.setMode(AppMode.partner);
+      return [const PartnerShell()];
+    }
+    return [const DonorShell()];
+  }
   if (start == 'showreel') return const [ShowreelScreen()];
   if (start == 'tour') return const [TourScreen()];
 
@@ -181,6 +227,7 @@ List<Widget> _startStack(bool loggedIn) {
     _ => start,
   };
   if (target == 'login') return const [cover, LoginScreen()];
+  if (target == 'partner-login') return const [cover, LoginScreen(), PartnerLoginScreen()];
   if (target == 'home') return const [DonorShell()];
   if (target == 'returning') return const [DonorShell()];
   // Precisam de uma conta que já entrou: com ponto (inst) ou da equipe (team).
@@ -193,6 +240,12 @@ List<Widget> _startStack(bool loggedIn) {
     if (!loggedIn || !store.isTeam) return const [DonorShell()];
     store.setMode(AppMode.team);
     return const [TeamShell()];
+  }
+  // Conta ligada a uma empresa do catálogo (partners.owner_id, fase 10).
+  if (target == 'partner') {
+    if (!loggedIn || store.myPartner == null) return const [DonorShell()];
+    store.setMode(AppMode.partner);
+    return const [PartnerShell()];
   }
   if (!flow.containsKey(target)) return const [SplashScreen()];
 

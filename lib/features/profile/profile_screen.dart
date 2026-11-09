@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import '../../core/format.dart';
 import '../../core/icons.dart';
 
 import '../../core/routes.dart';
@@ -21,7 +22,9 @@ import 'text_pages.dart';
 import '../shared/help_ui.dart';
 import '../signup/city_sheet.dart';
 import '../signup/places_service.dart';
+import '../shell/donor_shell.dart';
 import '../splash/splash_screen.dart';
+import '../partner/partner_shell.dart';
 import '../team/team_shell.dart';
 
 /// Tab "Perfil": city, preferences, notices and account. Also the door to
@@ -141,6 +144,19 @@ class ProfileScreen extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (store.points case final pts?) ...[
+                    const SizedBox(height: 10),
+                    AppCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      child: InfoRow(
+                        icon: PhosphorIconsRegular.coins,
+                        title: 'Meus pontos',
+                        value: '${Fmt.count(pts.balance)} ${pts.balance == 1 ? 'ponto' : 'pontos'} · ${pts.level.label}',
+                        chevron: true,
+                        onTap: () => goToTab(context, pointsTab),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 26),
                   const SectionTitle('Minhas preferências'),
                   AppCard(
@@ -288,6 +304,38 @@ class ProfileScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                  if (store.myPartner case final parceiro?) ...[
+                    const SizedBox(height: 10),
+                    AppCard(
+                      onTap: () {
+                        store.setMode(AppMode.partner);
+                        context.replaceAll(const PartnerShell());
+                      },
+                      child: Row(
+                        children: [
+                          IconTile(icon: PhosphorIconsFill.ticket, color: AppColors.ocre600, size: 44),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Ir para o modo parceiro',
+                                  style: AppType.label(
+                                    color: AppColors.cinza900,
+                                    size: 15.5,
+                                  ).copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(parceiro.name, style: AppType.body(size: 14)),
+                              ],
+                            ),
+                          ),
+                          const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza500),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (store.isTeam) ...[
                     const SizedBox(height: 10),
                     AppCard(
