@@ -18,6 +18,8 @@ import '../features/institution/register/register_flow.dart';
 import '../features/auth/partner_login_screen.dart';
 import '../features/partner/partner_shell.dart';
 import '../features/place/place_screen.dart';
+import '../features/points/catalog_screen.dart';
+import '../features/points/history_screen.dart';
 import '../features/profile/edit_profile_screen.dart';
 import '../features/place/report_screen.dart';
 import '../features/shell/donor_shell.dart';
@@ -61,7 +63,33 @@ class _TourScreenState extends State<TourScreen> {
     }
     if (name == _current || name.isEmpty) return;
     _current = name;
-    _open(name);
+    // Uma tela que não monta (dados que o banco não tem) não pode derrubar
+    // o relógio: sem isto, o tour trava na tela anterior para sempre.
+    try {
+      _open(name);
+    } catch (e, pilha) {
+      debugPrint('tour: "$name" não abriu: $e\n$pilha');
+    }
+  }
+
+  /// O ponto com este apelido, ou qualquer um que sirva. Os apelidos são
+  /// dos dados fictícios antigos; com o banco real quase nenhum existe.
+  Place _ponto(String nome) =>
+      store.placeOrNull(nome) ?? store.places.firstWhere((p) => p.goals.isNotEmpty, orElse: () => store.places.first);
+
+  /// Um ponto que tenha meta deste tipo, com a meta junto.
+  (Place, Goal)? _meta(HelpType tipo) {
+    for (final p in store.places) {
+      for (final g in p.goals) {
+        if (g.type == tipo && g.progress < 1) return (p, g);
+      }
+    }
+    for (final p in store.places) {
+      for (final g in p.goals) {
+        if (g.type == tipo) return (p, g);
+      }
+    }
+    return null;
   }
 
   void _open(String name) {
@@ -82,27 +110,35 @@ class _TourScreenState extends State<TourScreen> {
         push = PlaceScreen(placeId: p!.id);
       case 'place-empty':
         setState(() => _root = 'donor');
-        push = const PlaceScreen(placeId: 'vila-nova');
+        final vazio = store.places.where((x) => x.goals.isEmpty).firstOrNull;
+        push = PlaceScreen(placeId: (vazio ?? p!).id);
       case 'place-full':
         setState(() => _root = 'donor');
-        push = const PlaceScreen(placeId: 'semear');
+        final cheio = store.places.where((x) => x.goals.any((g) => g.progress >= 1)).firstOrNull;
+        push = PlaceScreen(placeId: (cheio ?? p!).id);
       case 'pix':
-        push = PixScreen(placeId: 'santo-dumont', goalId: 'g3');
+        final m = _meta(HelpType.pix);
+        if (m != null) push = PixScreen(placeId: m.$1.id, goalId: m.$2.id);
       case 'declare':
-        push = DeclareScreen(placeId: 'santo-dumont', goalId: 'g3');
+        final m = _meta(HelpType.pix);
+        if (m != null) push = DeclareScreen(placeId: m.$1.id, goalId: m.$2.id);
       case 'items':
-        push = ItemsScreen(placeId: p!.id, goalId: 'g1');
+        final m = _meta(HelpType.itens);
+        if (m != null) push = ItemsScreen(placeId: m.$1.id, goalId: m.$2.id);
       case 'volunteer':
-        push = const VolunteerScreen(placeId: 'liberal', goalId: 'g4');
+        final m = _meta(HelpType.voluntariado);
+        if (m != null) push = VolunteerScreen(placeId: m.$1.id, goalId: m.$2.id);
       case 'done':
-        push = RegisteredScreen.pix(place: store.place('santo-dumont'), amount: 50);
+        push = RegisteredScreen.pix(place: _ponto('santo-dumont'), amount: 50);
       case 'monthly':
-        push = MonthlySetupScreen(placeId: 'santo-dumont', suggested: 50);
+        push = MonthlySetupScreen(placeId: _ponto('santo-dumont').id, suggested: 50);
       case 'monthly-pay':
-        final m = store.monthlyFor('santo-dumont') ?? store.startMonthly(store.place('santo-dumont'), 50, 10);
+        final alvo = _ponto('santo-dumont');
+        final m = store.monthlyFor(alvo.id) ?? store.startMonthly(alvo, 50, 10);
         push = MonthlyPayScreen(giftId: m.id);
       case 'monthly-list':
-        store.monthlyFor('lar-aurora') ?? store.startMonthly(store.place('lar-aurora'), 30, 5);
+        final outro = _ponto('lar-aurora');
+        store.monthlyFor(outro.id) ?? store.startMonthly(outro, 30, 5);
         store.setMode(AppMode.donor);
         donorTab.value = 1;
         setState(() => _root = 'donor');
@@ -186,6 +222,15 @@ class _TourScreenState extends State<TourScreen> {
         push = const GoalFlow();
       // Modo parceiro. Sem a fase 10 no banco não há empresa ligada à
       // conta, então o tour inventa uma só para a foto sair.
+      case 'catalog':
+        setState(() => _root = 'donor');
+        push = const CatalogScreen();
+      case 'redemptions':
+        setState(() => _root = 'donor');
+        push = const RedemptionsScreen();
+      case 'history':
+        setState(() => _root = 'donor');
+        push = const PointsHistoryScreen();
       case 'partner-login':
         setState(() => _root = 'donor');
         push = const PartnerLoginScreen();
