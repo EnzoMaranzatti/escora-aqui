@@ -63,7 +63,7 @@ class TeamReportsScreen extends StatelessWidget {
                                   ).copyWith(fontWeight: FontWeight.w600),
                                 ),
                               ),
-                              const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza400),
+                              const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza400),
                             ],
                           ),
                           const SizedBox(height: 3),

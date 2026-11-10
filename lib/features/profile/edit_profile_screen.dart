@@ -210,7 +210,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             border: Border.all(color: AppColors.cinza100),
                           ),
                           alignment: Alignment.center,
-                          child: const Icon(PhosphorIconsRegular.camera, size: 17, color: AppColors.petroleo600),
+                          child: const Icon(PhosphorIconsBold.camera, size: 17, color: AppColors.petroleo600),
                         ),
                       ),
                     ],

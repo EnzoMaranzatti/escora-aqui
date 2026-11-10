@@ -268,7 +268,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
           children: [
             const SizedBox(width: 13),
             Icon(
-              PhosphorIconsRegular.magnifyingGlass,
+              PhosphorIconsBold.magnifyingGlass,
               size: 19,
               color: focused ? AppColors.petroleo600 : AppColors.cinza500,
             ),
@@ -302,7 +302,7 @@ class _AppSearchFieldState extends State<AppSearchField> {
                   onTap: _clear,
                   child: const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(PhosphorIconsRegular.x, size: 17, color: AppColors.cinza600),
+                    child: Icon(PhosphorIconsBold.x, size: 17, color: AppColors.cinza600),
                   ),
                 ),
               )

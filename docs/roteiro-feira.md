@@ -62,16 +62,22 @@ Esta é a parte que precisa sair perfeita. Ensaie até fazer sem pensar.
 
 **No celular do doador** (conta da Mariana):
 
-1. **Mapa.** "Esses são os pontos perto daqui. Cada um foi conferido pela
-   nossa equipe: CNPJ em base pública, endereço e foto do local."
-2. Toque em **Instituto Raízes do Bairro**. "Repare: ele não pede dinheiro
+1. **Início.** "Isto é o que está acabando o prazo perto de mim." Deslize o
+   carrossel *Acaba logo* e desça até *Pertinho de você*.
+2. **Mapa** (segunda aba). "Esses são os pontos perto daqui. Cada um foi
+   conferido pela nossa equipe: CNPJ em base pública, endereço e foto do
+   local." Toque num pino: ele cresce e abre o painel com a meta da vez.
+3. Toque em **Instituto Raízes do Bairro**. "Repare: ele não pede dinheiro
    genérico. Ele diz o que precisa **hoje**." Mostre as metas — 60 kits de
    material escolar, 47 de 60, com prazo e motivo escrito pela própria
    instituição.
-3. **Doe por Pix.** "A chave é da instituição. O Escora aqui não recebe
+4. **Doe por Pix.** "A chave é da instituição. O Escora aqui não recebe
    nada, não cobra taxa, não movimenta dinheiro. A pessoa faz o Pix no app
    do banco dela e volta aqui para registrar."
-4. Registre **R$ 80**. "Pronto. Agora a parte que ninguém faz."
+5. Registre **R$ 80**. "Pronto. Agora a parte que ninguém faz."
+
+> As doações do doador agora ficam em **Perfil → Minhas doações** (deixaram
+> de ser uma aba). O rodapé é Início · Mapa · Pontos · Avisos · Perfil.
 
 **Troque para o celular da instituição** (conta da Renata) — ou mude de
 modo no mesmo aparelho:
@@ -86,6 +92,27 @@ modo no mesmo aparelho:
 > recebeu."**
 
 Se a pessoa for embora aqui, ótimo: ela entendeu o projeto inteiro.
+
+### Se alguém perguntar "e se a instituição nunca confirmar?"
+
+É a pergunta mais comum, e tem resposta na tela. Abra **Perfil → Minhas
+doações → a doação** e mostre a linha do tempo: a etapa atual tem uma
+**barra de prazo**. A instituição tem **3 dias** para conferir.
+
+- Dentro do prazo, a barra enche em petróleo e diz *"até 13/11 · faltam
+  2 dias"*.
+- Passado o prazo, tudo vira ocre e aparece um cartão: *"A confirmação
+  passou do prazo"*, com o botão **Avisar o Escora sobre a demora**. Quem
+  doou escolhe o motivo e o aviso cai na mesa da equipe com o código da
+  doação e os dias de espera. Do outro lado, a doação aparece na fila da
+  instituição com o selo **Passou do prazo**.
+
+> "O Escora não segura o dinheiro, então não tem como devolver. O que ele
+> tem é prazo: passou de três dias, quem doou não fica sozinho — a equipe
+> cobra, e o ponto que não responde sai do mapa."
+
+No tour de desenvolvimento os casos são `donation-late` (a doação
+atrasada) e `donation-nudge` (a tela do aviso).
 
 ---
 

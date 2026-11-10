@@ -135,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
-                                        PhosphorIconsRegular.storefront,
+                                        PhosphorIconsBold.storefront,
                                         size: 18,
                                         color: AppColors.white.withValues(alpha: .8),
                                       ),

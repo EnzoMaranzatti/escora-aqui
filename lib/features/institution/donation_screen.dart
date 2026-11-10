@@ -518,7 +518,7 @@ class _MiniAction extends StatelessWidget {
             borderRadius: BorderRadius.circular(11),
           ),
           alignment: Alignment.center,
-          child: Icon(icon, size: 17, color: AppColors.petroleo700),
+          child: Icon(icon.bold, size: 17, color: AppColors.petroleo700),
         ),
       ),
     );

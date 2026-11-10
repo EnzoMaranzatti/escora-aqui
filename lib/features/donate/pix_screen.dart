@@ -113,7 +113,7 @@ class PixScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 10),
-                      const Icon(PhosphorIconsRegular.copy, size: 22, color: AppColors.petroleo600),
+                      const Icon(PhosphorIconsBold.copy, size: 22, color: AppColors.petroleo600),
                     ],
                   ),
                 ),
@@ -125,7 +125,7 @@ class PixScreen extends StatelessWidget {
                   children: [
                     const Padding(
                       padding: EdgeInsets.only(top: 2),
-                      child: Icon(PhosphorIconsRegular.bank, size: 18, color: AppColors.cinza700),
+                      child: Icon(PhosphorIconsBold.bank, size: 18, color: AppColors.cinza700),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -256,7 +256,7 @@ class _DeclareScreenState extends State<DeclareScreen> {
                 IconButton(
                   tooltip: 'Remover comprovante',
                   onPressed: () => setState(() => _receipt = null),
-                  icon: const Icon(PhosphorIconsRegular.x, size: 18, color: AppColors.cinza600),
+                  icon: const Icon(PhosphorIconsBold.x, size: 18, color: AppColors.cinza600),
                 ),
               ],
             ),

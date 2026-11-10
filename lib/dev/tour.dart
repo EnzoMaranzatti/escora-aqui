@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show timeDilation;
 
 import '../core/routes.dart';
 import '../data/store.dart';
@@ -9,6 +10,9 @@ import '../features/donate/items_screen.dart';
 import '../features/donate/monthly_screen.dart';
 import '../features/donate/pix_screen.dart';
 import '../features/donate/registered_screen.dart';
+import '../features/donations/delay_report_screen.dart';
+import '../features/donations/donation_detail_screen.dart';
+import '../features/donations/donations_screen.dart';
 import '../features/donate/volunteer_screen.dart';
 import '../features/institution/donation_screen.dart';
 import '../features/institution/donations_inbox_screen.dart';
@@ -20,6 +24,7 @@ import '../features/partner/partner_shell.dart';
 import '../features/place/place_screen.dart';
 import '../features/points/catalog_screen.dart';
 import '../features/points/history_screen.dart';
+import '../features/home/home_screen.dart' show mapDemo;
 import '../features/profile/edit_profile_screen.dart';
 import '../features/place/report_screen.dart';
 import '../features/shell/donor_shell.dart';
@@ -93,6 +98,12 @@ class _TourScreenState extends State<TourScreen> {
   }
 
   void _open(String name) {
+    // "x8" deixa toda a animação 8 vezes mais lenta, para dar tempo de
+    // fotografar o meio de um movimento pelo simulador. "x1" volta ao normal.
+    if (name.startsWith('x')) {
+      timeDilation = double.tryParse(name.substring(1)) ?? 1;
+      return;
+    }
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
     // Com os dados reais do banco o ponto de demonstração não existe; as
@@ -101,10 +112,42 @@ class _TourScreenState extends State<TourScreen> {
     if (p == null && name != 'inst' && !name.startsWith('inst-')) return;
     Widget? push;
     switch (name) {
-      case 'map' || 'donations' || 'points' || 'notices' || 'profile':
+      case 'start' || 'map' || 'points' || 'notices' || 'profile':
         store.setMode(AppMode.donor);
-        donorTab.value = ['map', 'donations', 'points', 'notices', 'profile'].indexOf(name);
+        donorTab.value = ['start', 'map', 'points', 'notices', 'profile'].indexOf(name);
         setState(() => _root = 'donor');
+        mapDemo.value = null;
+      case 'donations':
+        store.setMode(AppMode.donor);
+        donorTab.value = profileTab;
+        setState(() => _root = 'donor');
+        mapDemo.value = null;
+        push = const DonationsScreen(standalone: true);
+      // O cartão do ponto no mapa, e com o caminho desenhado. Pelo mouse
+      // seria preciso acertar um pino de 24px.
+      case 'map-card' || 'map-route' || 'map-next' || 'map-card-vazio' || 'map-card-baralho':
+        store.setMode(AppMode.donor);
+        donorTab.value = mapTab;
+        setState(() => _root = 'donor');
+        final comMeta = store.verifiedPlaces.where((x) => x.openGoals.isNotEmpty).toList();
+        // O cartão de um ponto sem meta aberta: é outro desenho (o bloco
+        // vazio ocupando o lugar do baralho) e some do tour se não tiver
+        // caso próprio.
+        final semMeta = store.verifiedPlaces.where((x) => x.openGoals.isEmpty).firstOrNull ??
+            store.places.where((x) => x.openGoals.isEmpty).firstOrNull;
+        // O ponto com mais metas abertas: é o único jeito de ver o
+        // baralho sem sair catando pino no mapa.
+        final maisMetas = [...comMeta]..sort((a, b) => b.openGoals.length.compareTo(a.openGoals.length));
+        final alvo = switch (name) {
+          'map-next' => comMeta.skip(1).firstOrNull,
+          'map-card-vazio' => semMeta,
+          'map-card-baralho' => maisMetas.firstOrNull,
+          _ => comMeta.firstOrNull,
+        } ?? p!;
+        mapDemo.value = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          mapDemo.value = '${name == 'map-route' ? 'route:' : ''}${alvo.id}';
+        });
       case 'place':
         setState(() => _root = 'donor');
         push = PlaceScreen(placeId: p!.id);
@@ -130,6 +173,32 @@ class _TourScreenState extends State<TourScreen> {
         if (m != null) push = VolunteerScreen(placeId: m.$1.id, goalId: m.$2.id);
       case 'done':
         push = RegisteredScreen.pix(place: _ponto('santo-dumont'), amount: 50);
+      case 'donation-detail' || 'donation-detail-ok' || 'donation-late' || 'donation-nudge':
+        // A conta do tour não tem doações no banco, então a doação do
+        // recibo é montada aqui mesmo, só para a tela ter o que mostrar.
+        final m = _meta(HelpType.pix);
+        if (m != null) {
+          final pronta = name.endsWith('-ok');
+          final avisar = name.endsWith('-nudge');
+          final atrasada = name.endsWith('-late') || avisar;
+          const id = 'tour-recibo';
+          store.donations.removeWhere((d) => d.id == id);
+          store.donations.add(
+            Donation(
+              id: id,
+              placeId: m.$1.id,
+              goalId: m.$2.id,
+              type: HelpType.pix,
+              amount: 80,
+              date: DateTime.now().subtract(Duration(days: atrasada ? 6 : 2)),
+              donor: 'Mariana',
+              mine: true,
+              status: pronta ? DonationStatus.confirmed : DonationStatus.waiting,
+              confirmedAt: pronta ? DateTime.now() : null,
+            ),
+          );
+          push = avisar ? const DelayReportScreen(donationId: id) : const DonationDetailScreen(id);
+        }
       case 'monthly':
         push = MonthlySetupScreen(placeId: _ponto('santo-dumont').id, suggested: 50);
       case 'monthly-pay':
@@ -140,13 +209,14 @@ class _TourScreenState extends State<TourScreen> {
         final outro = _ponto('lar-aurora');
         store.monthlyFor(outro.id) ?? store.startMonthly(outro, 30, 5);
         store.setMode(AppMode.donor);
-        donorTab.value = 1;
+        donorTab.value = profileTab;
         setState(() => _root = 'donor');
+        push = const DonationsScreen(standalone: true);
       case 'edit-profile':
         push = const EditProfileScreen();
       case 'map-list':
         store.setMode(AppMode.donor);
-        donorTab.value = 0;
+        donorTab.value = mapTab;
         setState(() => _root = 'donor');
       case 'report':
         push = ReportScreen(placeId: p!.id);
@@ -181,13 +251,7 @@ class _TourScreenState extends State<TourScreen> {
           ..payee = 'Associação Cozinha Comunitária Vila Nova'
           ..accepts.addAll({HelpType.pix, HelpType.itens});
         WidgetsBinding.instance.addPostFrameCallback((_) => openRegister(nav.context));
-      case 'inst' ||
-          'inst-goals' ||
-          'inst-inbox' ||
-          'inst-done' ||
-          'inst-vol' ||
-          'inst-summary' ||
-          'inst-point':
+      case 'inst' || 'inst-goals' || 'inst-inbox' || 'inst-done' || 'inst-vol' || 'inst-summary' || 'inst-point':
         store.setMode(AppMode.institution);
         setState(() => _root = 'inst');
         WidgetsBinding.instance.addPostFrameCallback((_) {

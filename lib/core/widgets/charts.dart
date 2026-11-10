@@ -94,7 +94,7 @@ class TrendPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(up ? PhosphorIconsRegular.trendUp : PhosphorIconsRegular.trendDown, size: 13, color: tone.fg),
+          Icon(up ? PhosphorIconsBold.trendUp : PhosphorIconsBold.trendDown, size: 13, color: tone.fg),
           const SizedBox(width: 3),
           Text(
             '${up ? '+' : '−'}${n.toStringAsFixed(0)}%',

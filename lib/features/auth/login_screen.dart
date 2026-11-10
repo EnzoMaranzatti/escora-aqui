@@ -153,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     const Icon(
-                                      PhosphorIconsRegular.storefront,
+                                      PhosphorIconsBold.storefront,
                                       size: 18,
                                       color: AppColors.cinza600,
                                     ),

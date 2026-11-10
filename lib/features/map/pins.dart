@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_typography.dart';
@@ -130,91 +132,126 @@ class InstitutionPin extends StatelessWidget {
   }
 }
 
-/// Map pin with the point's photo: round photo in a ring of the help-type
-/// color, a short stem and a dot that sits on the exact spot. The marker's
-/// bottom center is the point (use `Alignment.topCenter` on the Marker).
+/// Pino do ponto no mapa, em dois tamanhos. Em repouso é um disco pequeno
+/// com o ícone do tipo de ajuda: vinte e cinco fotos de 46px lado a lado
+/// viram sopa, e o mapa precisa ser lido antes dos pontos. Ao ser escolhido,
+/// a cabeça cresce para a foto do lugar e o pé se alonga, sem sair do ponto
+/// exato — o que move é o tamanho, nunca a coordenada.
+///
+/// O centro de baixo do marcador é a coordenada (use `Alignment.topCenter`
+/// no [Marker]).
+/// O pino do mapa: a gota clássica, com a foto da instituição dentro.
+///
+/// A foto é o que faz a pessoa reconhecer o lugar da rua dela — melhor que
+/// um ícone, que só diz a categoria. O anel colorido continua dizendo o tipo
+/// de ajuda, porque o guia pede cor **e** forma, nunca cor sozinha.
+///
+/// O que anima é uma escala sobre um desenho pronto: animar tamanho, borda e
+/// sombra quadro a quadro trava com 25 pinos na tela.
 class PhotoPin extends StatelessWidget {
-  const PhotoPin({super.key, required this.place, this.selected = false});
+  const PhotoPin({super.key, required this.place, this.selected = false, this.dimmed = false});
 
-  static const head = 46.0;
-  static const width = 60.0;
-  static const height = head + stem + 8;
-  static const stem = 12.0;
+  /// Diâmetro da cabeça do pino aberto. O fechado é o mesmo desenho menor.
+  static const head = 58.0;
+
+  /// A ponta fica a 1.62 raio do centro: é a proporção que dá a gota de
+  /// mapa, nem bolha nem lágrima esticada.
+  static const _drop = 1.62;
+  static const pinH = head / 2 * (1 + _drop);
+  static const _closed = .72;
+
+  static const width = head + 10;
+  static const height = pinH + 8;
 
   final Place place;
   final bool selected;
 
+  /// Outro ponto está escolhido: este sai um pouco de cena.
+  final bool dimmed;
+
   @override
   Widget build(BuildContext context) {
-    final image = place.image;
     final color = place.primaryType.color;
-    return AnimatedScale(
-      scale: selected ? 1.18 : 1,
-      alignment: Alignment.bottomCenter,
-      duration: AppMotion.medium,
-      curve: AppMotion.pop,
-      child: SizedBox(
-        width: width,
-        height: height,
-        child: Column(
-          children: [
-            SizedBox(
-              width: head,
-              height: head,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  AnimatedContainer(
-                    duration: AppMotion.medium,
-                    curve: AppMotion.smooth,
-                    width: head,
-                    height: head,
-                    padding: EdgeInsets.all(selected ? 3 : 2.5),
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.cinza900.withValues(alpha: selected ? .24 : .14),
-                          blurRadius: selected ? 14 : 8,
-                          offset: Offset(0, selected ? 5 : 2),
+    final image = place.image;
+    const inset = 4.0;
+    const photo = head - inset * 2;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: AnimatedOpacity(
+        duration: AppMotion.medium,
+        curve: AppMotion.smooth,
+        opacity: dimmed ? .5 : 1,
+        child: AnimatedScale(
+          duration: AppMotion.medium,
+          curve: AppMotion.spring,
+          alignment: Alignment.bottomCenter,
+          scale: selected ? 1 : _closed,
+          child: RepaintBoundary(
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                width: head,
+                height: pinH,
+                child: Stack(
+                  children: [
+                    // A silhueta inteira num caminho só: círculo em cima,
+                    // duas tangentes descendo até o bico que toca o endereço.
+                    Positioned.fill(child: CustomPaint(painter: const _DropPainter())),
+                    Positioned(
+                      left: inset,
+                      top: inset,
+                      width: photo,
+                      height: photo,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color,
+                          border: Border.all(color: color, width: 2.5),
                         ),
-                      ],
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(color: AppColors.white, shape: BoxShape.circle),
-                      child: ClipOval(
-                        child: image == null
-                            ? ColoredBox(
-                                color: color,
-                                child: Center(child: SvgIcon(place.kind.icon, size: 18, color: AppColors.white)),
-                              )
-                            : Image(image: ResizeImage(image, width: 150), fit: BoxFit.cover),
+                        child: ClipOval(
+                          child: image == null
+                              ? const Center(child: Icon(PhosphorIconsFill.mapPin, size: 22, color: AppColors.white))
+                              : Image(image: ResizeImage(image, width: 160), fit: BoxFit.cover, gaplessPlayback: true),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            Container(width: 2, height: stem, color: color),
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.white, width: 1.5),
-                boxShadow: [
-                  BoxShadow(color: AppColors.cinza900.withValues(alpha: .2), blurRadius: 3, offset: const Offset(0, 1)),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// A gota branca: um círculo e as duas retas que o fecham no bico.
+class _DropPainter extends CustomPainter {
+  const _DropPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width / 2;
+    final c = Offset(r, r);
+    final d = size.height - r;
+
+    // Onde as retas encostam no círculo sem cruzá-lo.
+    final beta = math.acos((r / d).clamp(-1.0, 1.0));
+    final rect = Rect.fromCircle(center: c, radius: r);
+    final path = Path()
+      ..moveTo(c.dx - r * math.sin(beta), c.dy + r * math.cos(beta))
+      ..arcTo(rect, math.pi / 2 + beta, 2 * math.pi - 2 * beta, false)
+      ..lineTo(c.dx, c.dy + d)
+      ..close();
+
+    canvas.drawShadow(path, AppColors.cinza900.withValues(alpha: .45), 5, false);
+    canvas.drawPath(path, Paint()..color = AppColors.white);
+  }
+
+  @override
+  bool shouldRepaint(_DropPainter old) => false;
 }
 
 /// List thumbnail for a point: its photo when there is one, else its pin.

@@ -276,7 +276,7 @@ class RedemptionsScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            const Icon(PhosphorIconsRegular.copy, size: 20, color: AppColors.petroleo600),
+                            const Icon(PhosphorIconsBold.copy, size: 20, color: AppColors.petroleo600),
                           ],
                         ),
                       ),

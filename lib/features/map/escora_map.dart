@@ -26,6 +26,7 @@ class EscoraMap extends StatelessWidget {
     this.onTap,
     this.onReady,
     this.onMoved,
+    this.onGesture,
   });
 
   final MapController controller;
@@ -41,6 +42,10 @@ class EscoraMap extends StatelessWidget {
   /// Camera moved (by gesture or code).
   final void Function(LatLng center, double zoom)? onMoved;
 
+  /// A pessoa está mexendo no mapa com o dedo (arrastar ou pinçar). Serve
+  /// para a tela sair da frente enquanto ela explora.
+  final VoidCallback? onGesture;
+
   @override
   Widget build(BuildContext context) {
     return FlutterMap(
@@ -53,7 +58,12 @@ class EscoraMap extends StatelessWidget {
         backgroundColor: mapBackground,
         onTap: onTap == null ? null : (_, _) => onTap!(),
         onMapReady: onReady,
-        onPositionChanged: onMoved == null ? null : (cam, _) => onMoved!(cam.center, cam.zoom),
+        onPositionChanged: onMoved == null && onGesture == null
+            ? null
+            : (cam, byHand) {
+                onMoved?.call(cam.center, cam.zoom);
+                if (byHand) onGesture?.call();
+              },
         interactionOptions: InteractionOptions(
           flags: interactive ? InteractiveFlag.all & ~InteractiveFlag.rotate : InteractiveFlag.none,
         ),
@@ -113,7 +123,16 @@ class MapMover {
   final MapController controller;
   final AnimationController _c;
 
-  Future<void> flyTo(LatLng dest, double zoom, {Duration? duration, Curve curve = AppMotion.glide}) async {
+  /// [offset] desloca o alvo na tela: `Offset(0, -100)` faz o ponto parar
+  /// cem pixels acima do centro, que é onde sobra mapa quando há um cartão
+  /// em cima da metade de baixo.
+  Future<void> flyTo(
+    LatLng dest,
+    double zoom, {
+    Duration? duration,
+    Curve curve = AppMotion.glide,
+    Offset offset = Offset.zero,
+  }) async {
     final cam = controller.camera;
     final from = cam.center;
     final z0 = cam.zoom;
@@ -126,7 +145,9 @@ class MapMover {
       final lat = from.latitude + (dest.latitude - from.latitude) * t;
       final lng = from.longitude + (dest.longitude - from.longitude) * t;
       final z = z0 + (zoom - z0) * t - arc * math.sin(math.pi * t);
-      controller.move(LatLng(lat, lng), z);
+      // O deslocamento entra junto com a viagem: aplicado de uma vez, o
+      // primeiro quadro daria um salto.
+      controller.move(LatLng(lat, lng), z, offset: offset * t);
     }
 
     _c.addListener(tick);
@@ -138,6 +159,10 @@ class MapMover {
       _c.removeListener(tick);
     }
   }
+
+  /// Corta a viagem em andamento. Sem isto, um `fitCamera` disparado no meio
+  /// de um voo é desfeito pelo quadro seguinte da animação.
+  void stop() => _c.stop();
 
   void dispose() => _c.dispose();
 }

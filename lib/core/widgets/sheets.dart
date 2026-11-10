@@ -24,7 +24,7 @@ Future<T?> showAppSheet<T>(BuildContext context, {required WidgetBuilder builder
     enableDrag: dismissible,
     backgroundColor: Colors.transparent,
     barrierColor: AppColors.cinza900.withValues(alpha: .28),
-    sheetAnimationStyle: const AnimationStyle(duration: AppMotion.slow, curve: AppMotion.smooth),
+    sheetAnimationStyle: const AnimationStyle(duration: AppMotion.slow, curve: AppMotion.spring),
     builder: (context) => _SheetFrame(child: builder(context)),
   );
 }
@@ -283,7 +283,7 @@ class _ToastViewState extends State<_ToastView> with SingleTickerProviderStateMi
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
-    final a = CurvedAnimation(parent: _c, curve: AppMotion.smooth, reverseCurve: Curves.easeIn);
+    final a = CurvedAnimation(parent: _c, curve: AppMotion.spring, reverseCurve: Curves.easeIn);
     return Positioned(
       left: 16,
       right: 16,

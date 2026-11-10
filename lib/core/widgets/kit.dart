@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import '../../core/icons.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_elevation.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_typography.dart';
 import 'pressable.dart';
@@ -155,7 +156,7 @@ class NoticeBanner extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 1),
-            child: Icon(icon ?? tone.icon, size: 18, color: tone.fg),
+            child: Icon((icon ?? tone.icon).bold, size: 18, color: tone.fg),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -182,7 +183,7 @@ class NoticeBanner extends StatelessWidget {
                 onTap: onClose,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 8, bottom: 8),
-                  child: Icon(PhosphorIconsRegular.x, size: 18, color: tone.fg),
+                  child: Icon(PhosphorIconsBold.x, size: 18, color: tone.fg),
                 ),
               ),
             ),
@@ -223,7 +224,7 @@ class LinkText extends StatelessWidget {
                   decorationThickness: 1.5,
                 ),
               ),
-              if (icon != null) ...[const SizedBox(width: 4), Icon(icon, size: size + 2, color: color)],
+              if (icon != null) ...[const SizedBox(width: 4), Icon(icon!.bold, size: size + 2, color: color)],
             ],
           ),
         ),
@@ -254,7 +255,7 @@ class IconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       alignment: Alignment.center,
-      child: Icon(icon, size: size * .44, color: color),
+      child: Icon(size * .44 <= 22 ? icon.bold : icon, size: size * .44, color: color),
     );
   }
 }
@@ -368,7 +369,7 @@ class SoftButton extends StatelessWidget {
             mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[Icon(icon, size: 18, color: fg), const SizedBox(width: 8)],
+              if (icon != null) ...[Icon(icon!.bold, size: 18, color: fg), const SizedBox(width: 8)],
               Flexible(
                 child: Text(
                   label,
@@ -401,11 +402,8 @@ class AppCard extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: color ?? AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.cinza100),
-        boxShadow: [
-          BoxShadow(color: AppColors.cinza900.withValues(alpha: .03), blurRadius: 10, offset: const Offset(0, 2)),
-        ],
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: AppElevation.card,
       ),
       child: child,
     );
@@ -479,7 +477,7 @@ class InfoRow extends StatelessWidget {
                 height: 36,
                 decoration: BoxDecoration(color: AppColors.cinza50, borderRadius: BorderRadius.circular(10)),
                 alignment: Alignment.center,
-                child: Icon(icon, size: 19, color: AppColors.cinza700),
+                child: Icon(icon!.bold, size: 19, color: AppColors.cinza700),
               ),
               const SizedBox(width: 12),
             ],
@@ -502,7 +500,7 @@ class InfoRow extends StatelessWidget {
             ?trailing,
             if (chevron) ...[
               const SizedBox(width: 8),
-              const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza500),
+              const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza500),
             ],
           ],
         ),
@@ -540,7 +538,7 @@ class StatusTag extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, size: 13, color: tone.fg), const SizedBox(width: 4)],
+          if (icon != null) ...[Icon(icon!.bold, size: 13, color: tone.fg), const SizedBox(width: 4)],
           Text(
             label,
             style: AppType.label(color: tone.fg, size: 12.5).copyWith(height: 1.1, fontWeight: FontWeight.w600),
@@ -679,7 +677,7 @@ class OptionTile extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: Icon(
-                    icon,
+                    icon!.bold,
                     size: 21,
                     color: iconColor ?? (selected ? AppColors.petroleo600 : AppColors.cinza700),
                   ),
@@ -832,9 +830,9 @@ class ChoiceChipPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (icon != null) ...[Icon(icon, size: 16, color: fg), const SizedBox(width: 6)],
+              if (icon != null) ...[Icon(icon!.bold, size: 16, color: fg), const SizedBox(width: 6)],
               Text(label, style: AppType.label(size: 14, color: fg)),
-              if (trailing != null) ...[const SizedBox(width: 4), Icon(trailing, size: 14, color: fg)],
+              if (trailing != null) ...[const SizedBox(width: 4), Icon(trailing!.bold, size: 14, color: fg)],
             ],
           ),
         ),
@@ -971,7 +969,76 @@ class IconTile extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(color: color.withValues(alpha: .1), borderRadius: BorderRadius.circular(size * .3)),
       alignment: Alignment.center,
-      child: Icon(icon, size: size * .48, color: color),
+      child: Icon(size * .48 <= 22 ? icon.bold : icon, size: size * .48, color: color),
+    );
+  }
+}
+
+/// Um número e o que ele conta, para a faixa de estatísticas.
+class Stat {
+  const Stat(this.value, this.label, {this.tone, this.onTap});
+
+  final String value;
+  final String label;
+
+  /// Para onde o número leva, quando leva a algum lugar.
+  final VoidCallback? onTap;
+
+  /// Cor do número. O padrão é o cinza escuro do texto; o petróleo marca o
+  /// número que a tela quer que seja lido primeiro.
+  final Color? tone;
+}
+
+/// Três números lado a lado, no mesmo card, separados por um fio.
+///
+/// Serve para a pessoa ver de uma vez o tamanho do que já fez — o que, no
+/// perfil, é a única coisa ali que não é ajuste de conta.
+class StatStrip extends StatelessWidget {
+  const StatStrip({super.key, required this.stats});
+
+  final List<Stat> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, s) in stats.indexed) ...[
+              if (i > 0)
+                Container(width: 1, margin: const EdgeInsets.symmetric(vertical: 2), color: AppColors.cinza200),
+              Expanded(
+                child: Pressable(
+                  onTap: s.onTap,
+                  scale: .95,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        s.value,
+                        maxLines: 1,
+                        style: AppType.display(
+                          size: 22,
+                          color: s.tone ?? AppColors.cinza900,
+                        ).copyWith(fontFeatures: const [FontFeature.tabularFigures()], height: 1.1),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        s.label,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        style: AppType.body(size: 12.5, color: AppColors.cinza600).copyWith(height: 1.25),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

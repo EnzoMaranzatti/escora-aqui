@@ -45,9 +45,9 @@ class RegisteredScreen extends StatelessWidget {
       title: title,
       text: text,
       primary: 'Voltar ao mapa',
-      onPrimary: () => goToTab(context, 0),
+      onPrimary: () => goToTab(context, mapTab),
       secondary: 'Ver minhas doações',
-      onSecondary: () => goToTab(context, 1),
+      onSecondary: () => goToDonations(context),
       extra: place == null
           ? null
           : ListenableBuilder(

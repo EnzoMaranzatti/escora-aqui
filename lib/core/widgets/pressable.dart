@@ -37,10 +37,12 @@ class _PressableState extends State<Pressable> {
               if (widget.haptic) HapticFeedback.selectionClick();
               widget.onTap!();
             },
+      // Encolher acompanha o dedo e não tem mola; a volta tem. É o que faz o
+      // controle parecer que tem peso em vez de piscar entre dois tamanhos.
       child: AnimatedScale(
         scale: _down ? widget.scale : 1,
         duration: _down ? AppMotion.fast : AppMotion.medium,
-        curve: AppMotion.smooth,
+        curve: _down ? AppMotion.smooth : AppMotion.spring,
         child: widget.child,
       ),
     );

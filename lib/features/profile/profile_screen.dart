@@ -6,13 +6,16 @@ import '../../core/icons.dart';
 
 import '../../core/routes.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_elevation.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/kit.dart';
+import '../../core/widgets/pressable.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
 import '../../data/auth.dart';
 import '../../data/store.dart';
+import '../donations/donations_screen.dart';
 import '../institution/institution_shell.dart';
 import '../institution/register/register_flow.dart';
 import '../map/pins.dart';
@@ -101,6 +104,15 @@ class ProfileScreen extends StatelessWidget {
     context.replaceAll(const SplashScreen(startAtEnd: true));
   }
 
+  /// Só o que a instituição confirmou entra na conta: o número tem de ser o
+  /// que chegou do outro lado, não o que a pessoa declarou.
+  double _totalDoado() => store.myDonations
+      .where((d) => d.type == HelpType.pix && d.status == DonationStatus.confirmed)
+      .fold(0.0, (soma, d) => soma + d.amount);
+
+  int _pontosAjudados() =>
+      store.myDonations.where((d) => d.status == DonationStatus.confirmed).map((d) => d.placeId).toSet().length;
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -117,46 +129,49 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList.list(
                 children: [
+                  _Cabecalho(name: fullName, photo: store.avatar, email: store.email),
+                  const SizedBox(height: 20),
+                  // Cada número leva para onde ele é explicado; o card
+                  // "Meus pontos" que ficava aqui dizia a mesma coisa que a
+                  // terceira coluna.
+                  StatStrip(
+                    stats: [
+                      Stat(
+                        Fmt.money(_totalDoado()),
+                        'Total doado',
+                        tone: AppColors.petroleo700,
+                        onTap: () => goToDonations(context),
+                      ),
+                      Stat(
+                        '${_pontosAjudados()}',
+                        _pontosAjudados() == 1 ? 'Ponto ajudado' : 'Pontos ajudados',
+                        onTap: () => goToDonations(context),
+                      ),
+                      Stat(
+                        '${store.points?.balance ?? 0}',
+                        store.points?.level.label ?? 'Pontos',
+                        onTap: () => goToTab(context, pointsTab),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 26),
+                  const SectionTitle('Minha ajuda'),
                   AppCard(
-                    onTap: () => context.push(const EditProfileScreen()),
-                    child: Row(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Column(
                       children: [
-                        ProfileAvatar(photo: store.avatar, name: fullName),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                fullName == 'você' ? 'Sua conta' : fullName,
-                                style: AppType.cardTitle(size: 18, color: AppColors.cinza900),
-                              ),
-                              if (store.email.isNotEmpty) ...[
-                                const SizedBox(height: 3),
-                                Text(store.email, style: AppType.body(size: 14)),
-                              ],
-                              const SizedBox(height: 6),
-                              Text('Editar meus dados', style: AppType.label(size: 13.5, color: AppColors.petroleo700)),
-                            ],
-                          ),
+                        InfoRow(
+                          icon: PhosphorIconsRegular.receipt,
+                          title: 'Minhas doações',
+                          value: store.myDonations.isEmpty
+                              ? 'Nenhuma ainda'
+                              : '${store.myDonations.length} ${store.myDonations.length == 1 ? 'registro' : 'registros'}',
+                          action: 'Ver',
+                          onTap: () => context.push(const DonationsScreen(standalone: true)),
                         ),
-                        const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza400),
                       ],
                     ),
                   ),
-                  if (store.points case final pts?) ...[
-                    const SizedBox(height: 10),
-                    AppCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      child: InfoRow(
-                        icon: PhosphorIconsRegular.coins,
-                        title: 'Meus pontos',
-                        value: '${Fmt.count(pts.balance)} ${pts.balance == 1 ? 'ponto' : 'pontos'} · ${pts.level.label}',
-                        chevron: true,
-                        onTap: () => goToTab(context, pointsTab),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 26),
                   const SectionTitle('Minhas preferências'),
                   AppCard(
@@ -300,7 +315,7 @@ class ProfileScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza500),
+                          const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza500),
                         ],
                       ),
                     ),
@@ -331,7 +346,7 @@ class ProfileScreen extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza500),
+                          const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza500),
                         ],
                       ),
                     ),
@@ -356,7 +371,7 @@ class ProfileScreen extends StatelessWidget {
                               ).copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
-                          const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza500),
+                          const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza500),
                         ],
                       ),
                     ),
@@ -575,6 +590,63 @@ class FollowedScreen extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Topo do perfil: a foto grande, o nome e o e-mail, centralizados.
+///
+/// A foto estava do tamanho de um ícone de lista, dentro de um card igual a
+/// todos os outros da tela — o perfil parecia mais um ajuste entre ajustes. O
+/// retrato grande é o que diz "esta tela é sua"; o lápis sobre a borda da
+/// foto é o alvo de edição, no lugar onde a mão já procura.
+class _Cabecalho extends StatelessWidget {
+  const _Cabecalho({required this.name, required this.photo, required this.email});
+
+  final String name;
+  final String? photo;
+  final String email;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Pressable(
+          onTap: () => context.push(const EditProfileScreen()),
+          child: Stack(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: AppElevation.card),
+                child: ProfileAvatar(photo: photo, name: name, size: 104),
+              ),
+              Positioned(
+                right: 0,
+                bottom: 2,
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: AppElevation.raised,
+                  ),
+                  child: const Icon(PhosphorIconsBold.pencilSimple, size: 17, color: AppColors.petroleo700),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          name == 'você' ? 'Sua conta' : name,
+          textAlign: TextAlign.center,
+          style: AppType.display(size: 24).copyWith(height: 1.15),
+        ),
+        if (email.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(email, textAlign: TextAlign.center, style: AppType.body(size: 14.5)),
+        ],
+      ],
     );
   }
 }

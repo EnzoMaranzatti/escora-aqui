@@ -370,7 +370,7 @@ class _StepInstitutionState extends State<_StepInstitution> {
                     onChanged: (v) => setState(() => _search = v),
                     suffix: const Padding(
                       padding: EdgeInsets.only(right: 14),
-                      child: Icon(PhosphorIconsRegular.magnifyingGlass, size: 18, color: AppColors.cinza600),
+                      child: Icon(PhosphorIconsBold.magnifyingGlass, size: 18, color: AppColors.cinza600),
                     ),
                   ),
                   for (final p in matches) ...[
@@ -723,7 +723,7 @@ class _StepPlaceState extends State<_StepPlace> with TickerProviderStateMixin {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(PhosphorIconsRegular.camera, size: 16),
+                          const Icon(PhosphorIconsBold.camera, size: 16),
                           const SizedBox(width: 6),
                           Text('Enviar foto', style: AppType.label(size: 13.5)),
                         ],

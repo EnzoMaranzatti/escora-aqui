@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/icons.dart';
 
+import '../../core/routes.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../data/store.dart';
 import '../donations/donations_screen.dart';
 import '../home/home_screen.dart';
+import '../start/start_screen.dart';
 import '../notices/notices_screen.dart';
 import '../points/points_screen.dart';
 import '../profile/profile_screen.dart';
@@ -14,8 +16,8 @@ import '../profile/profile_screen.dart';
 final donorTab = ValueNotifier<int>(0);
 
 /// Tab positions in the bar below, for whoever sends the person to one.
-const mapTab = 0;
-const donationsTab = 1;
+const startTab = 0;
+const mapTab = 1;
 const pointsTab = 2;
 const noticesTab = 3;
 const profileTab = 4;
@@ -26,7 +28,20 @@ void goToTab(BuildContext context, int tab) {
   donorTab.value = tab;
 }
 
-/// Main screens of the donor: Mapa · Doações · Pontos · Avisos · Perfil. The
+/// As doações deixaram de ser uma aba: moraram cinco telas no rodapé e quem
+/// doa abre essa lista uma vez por semana, não por sessão. Agora é uma tela
+/// empurrada a partir do perfil — e quem vem de um fluxo ("Ver minhas
+/// doações") chega nela do mesmo jeito.
+void goToDonations(BuildContext context) {
+  final nav = Navigator.of(context);
+  nav.popUntil((r) => r.isFirst);
+  donorTab.value = profileTab;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (nav.mounted) nav.push(EscoraRoute(const DonationsScreen(standalone: true)));
+  });
+}
+
+/// Main screens of the donor: Início · Mapa · Pontos · Avisos · Perfil. The
 /// bar hides inside task flows (they are pushed above the shell).
 class DonorShell extends StatefulWidget {
   const DonorShell({super.key});
@@ -56,6 +71,8 @@ class _DonorShellState extends State<DonorShell> {
 
   void _onTab() {
     if (donorTab.value == noticesTab) _seen = DateTime.now();
+    // O mapa esconde a barra enquanto a pessoa arrasta; fora dele, ela volta.
+    if (donorTab.value != mapTab) navBarAway.value = false;
     setState(() {});
   }
 
@@ -70,22 +87,22 @@ class _DonorShellState extends State<DonorShell> {
     final badge = store.notices.where((n) => !n.read && n.date.isAfter(_seen)).length;
     return TabShell(
       index: donorTab.value,
-      pages: const [HomeScreen(), DonationsScreen(), PointsScreen(), NoticesScreen(), ProfileScreen()],
+      pages: const [StartScreen(), HomeScreen(), PointsScreen(), NoticesScreen(), ProfileScreen()],
       bar: AppNavBar(
         index: donorTab.value,
         onTap: (i) => donorTab.value = i,
         items: [
           const NavItem(
+            label: 'Início',
+            semantic: 'Início',
+            icon: PhosphorIconsRegular.squaresFour,
+            activeIcon: PhosphorIconsFill.squaresFour,
+          ),
+          const NavItem(
             label: 'Mapa',
             semantic: 'Mapa de pontos de apoio',
             icon: PhosphorIconsRegular.mapTrifold,
             activeIcon: PhosphorIconsFill.mapTrifold,
-          ),
-          const NavItem(
-            label: 'Doações',
-            semantic: 'Minhas doações',
-            icon: PhosphorIconsRegular.receipt,
-            activeIcon: PhosphorIconsFill.receipt,
           ),
           const NavItem(
             label: 'Pontos',

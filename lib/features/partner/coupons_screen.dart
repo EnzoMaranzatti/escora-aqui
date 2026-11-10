@@ -104,7 +104,7 @@ class _Hero extends StatelessWidget {
               Text('Esperando no balcão', style: AppType.body(size: 14)),
               const Spacer(),
               Icon(
-                esperando > 0 ? PhosphorIconsFill.ticket : PhosphorIconsRegular.ticket,
+                esperando > 0 ? PhosphorIconsFill.ticket : PhosphorIconsBold.ticket,
                 size: 20,
                 color: esperando > 0 ? AppColors.petroleo600 : AppColors.cinza400,
               ),

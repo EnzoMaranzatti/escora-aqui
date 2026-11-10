@@ -445,6 +445,27 @@ class AppStore extends ChangeNotifier {
     _save(() => remote.report(placeId, reason, text.trim()));
   }
 
+  /// Doações cuja demora quem doou já avisou, e quando.
+  ///
+  /// Fica na memória de propósito: o aviso em si vai para a mesa da equipe
+  /// (tabela `reports`), que é quem pode cobrar a instituição. O que a tela
+  /// precisa lembrar é só não oferecer o mesmo botão de novo e poder dizer
+  /// "você avisou em tal dia" em vez de deixar a pessoa na dúvida se foi.
+  final nudged = <String, DateTime>{};
+
+  /// Quem doou avisa que a confirmação não veio no prazo.
+  void reportDelay(Donation d, String reason, String text) {
+    nudged[d.id] = DateTime.now();
+    final p = placeOrNull(d.placeId);
+    report(
+      d.placeId,
+      reason,
+      '${text.trim()}\n\nDoação ${d.id} registrada em ${d.date.toIso8601String()} '
+      'para ${p?.name ?? d.placeId}, ${d.waitingDays} dias sem confirmação.',
+    );
+    touch();
+  }
+
   void markRead(Notice n) {
     n.read = true;
     _save(() => remote.markRead(n.id));
@@ -672,8 +693,7 @@ class AppStore extends ChangeNotifier {
     final existing = myPoint;
     // A point sent back for adjustment is fixed in place; after a refusal
     // or removal the person starts a new one.
-    final fixing =
-        existing != null && (existing.status == PlaceStatus.adjust || existing.status == PlaceStatus.draft);
+    final fixing = existing != null && (existing.status == PlaceStatus.adjust || existing.status == PlaceStatus.draft);
     final p = Place(
       id: fixing ? existing.id : nextId('p'),
       name: d.name.trim(),
@@ -715,9 +735,7 @@ class AppStore extends ChangeNotifier {
     final indicatedById = d.hasCnpj == false
         ? verifiedPlaces.where((x) => x.name == d.indicatedBy).firstOrNull?.id
         : null;
-    _save(
-      () => remote.savePlace(p, isNew: !fixing, indicatedById: indicatedById, cnpjUnchecked: d.cnpjUnchecked),
-    );
+    _save(() => remote.savePlace(p, isNew: !fixing, indicatedById: indicatedById, cnpjUnchecked: d.cnpjUnchecked));
     return p;
   }
 

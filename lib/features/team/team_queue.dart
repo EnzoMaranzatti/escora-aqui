@@ -106,7 +106,7 @@ class _TeamQueueScreenState extends State<TeamQueueScreen> {
                               ],
                             ),
                           ),
-                          const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza400),
+                          const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza400),
                         ],
                       ),
                     );
@@ -432,7 +432,7 @@ class _CheckItem extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(PhosphorIconsRegular.question, size: 16, color: AppColors.petroleo600),
+                const Icon(PhosphorIconsBold.question, size: 16, color: AppColors.petroleo600),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(question!, style: AppType.body(size: 14, color: AppColors.petroleo800)),

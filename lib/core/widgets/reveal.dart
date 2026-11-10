@@ -26,7 +26,12 @@ class Reveal extends StatefulWidget {
 
 class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(vsync: this, duration: widget.duration);
-  late final Animation<double> _a = CurvedAnimation(parent: _c, curve: AppMotion.smooth);
+
+  /// A opacidade sobe sem mola: um fade que passa de 1 e volta pisca.
+  late final Animation<double> _fade = CurvedAnimation(parent: _c, curve: AppMotion.smooth);
+
+  /// A subida e a escala, essas sim, passam um pouco do lugar e assentam.
+  late final Animation<double> _move = CurvedAnimation(parent: _c, curve: AppMotion.spring);
 
   @override
   void initState() {
@@ -45,15 +50,15 @@ class _RevealState extends State<Reveal> with SingleTickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _a,
+      animation: _c,
       child: widget.child,
       builder: (context, child) {
-        final v = _a.value;
+        final m = _move.value;
         return Opacity(
-          opacity: v.clamp(0, 1),
+          opacity: _fade.value.clamp(0, 1),
           child: Transform.translate(
-            offset: Offset(0, (1 - v) * widget.offset),
-            child: Transform.scale(scale: widget.scaleFrom + (1 - widget.scaleFrom) * v, child: child),
+            offset: Offset(0, (1 - m) * widget.offset),
+            child: Transform.scale(scale: widget.scaleFrom + (1 - widget.scaleFrom) * m, child: child),
           ),
         );
       },

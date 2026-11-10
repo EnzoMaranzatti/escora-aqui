@@ -117,14 +117,25 @@ class _DonationsInboxScreenState extends State<DonationsInboxScreen> {
     }
     final lista = fila.where((d) => _combina(d, store.goal(p, d.goalId))).toList();
     if (lista.isEmpty) return [_semResultado()];
+    final atrasadas = lista.where((d) => d.overdue).length;
     return [
-      const NoticeBanner(
-        tone: Tone.info,
-        icon: PhosphorIconsRegular.lightbulb,
-        text:
-            'Confira o extrato do banco ou o estoque antes de confirmar. A confirmação é o que mostra ao doador '
-            'que a ajuda chegou.',
-      ),
+      if (atrasadas > 0)
+        NoticeBanner(
+          tone: Tone.alert,
+          icon: PhosphorIconsRegular.hourglassMedium,
+          text:
+              '$atrasadas ${atrasadas == 1 ? 'doação passou' : 'doações passaram'} dos '
+              '${confirmWindow.inDays} dias de prazo. Quem doou está sem resposta e pode pedir à equipe '
+              'do Escora que cobre o ponto.',
+        )
+      else
+        const NoticeBanner(
+          tone: Tone.info,
+          icon: PhosphorIconsRegular.lightbulb,
+          text:
+              'Confira o extrato do banco ou o estoque antes de confirmar. A confirmação é o que mostra ao doador '
+              'que a ajuda chegou.',
+        ),
       const SizedBox(height: 14),
       // A fila é curta e é onde se age: cada doação ganha um cartão com o
       // botão de confirmar no rodapé, em vez de um botão solto na linha.
@@ -187,10 +198,7 @@ class _DonationsInboxScreenState extends State<DonationsInboxScreen> {
                   style: AppType.label(color: AppColors.cinza700, size: 13.5).copyWith(fontWeight: FontWeight.w700),
                 ),
               ),
-              Text(
-                '${e.value.length}',
-                style: AppType.body(size: 13).copyWith(fontFeatures: tabular),
-              ),
+              Text('${e.value.length}', style: AppType.body(size: 13).copyWith(fontFeatures: tabular)),
             ],
           ),
         ),
@@ -199,8 +207,7 @@ class _DonationsInboxScreenState extends State<DonationsInboxScreen> {
           child: Column(
             children: [
               for (final (i, d) in e.value.indexed) ...[
-                if (i > 0)
-                  const Padding(padding: EdgeInsets.only(left: 62), child: Hairline()),
+                if (i > 0) const Padding(padding: EdgeInsets.only(left: 62), child: Hairline()),
                 _DonationRow(d: d, goal: store.goal(p, d.goalId)),
               ],
             ],
@@ -264,9 +271,7 @@ Future<void> confirmarRecebimento(BuildContext context, Donation d, Goal? goal) 
   store.confirm(d);
   Toast.show(
     context,
-    goal == null
-        ? 'Recebimento confirmado.'
-        : 'Recebimento confirmado. A meta agora está em ${goal.progressLabel}.',
+    goal == null ? 'Recebimento confirmado.' : 'Recebimento confirmado. A meta agora está em ${goal.progressLabel}.',
   );
 }
 
@@ -296,8 +301,10 @@ class _DonationRow extends StatelessWidget {
     final segunda = switch (d.status) {
       DonationStatus.confirmed => 'Confirmada em ${Fmt.day(d.confirmedAt ?? d.date)}',
       DonationStatus.notFound => 'Não encontrada',
-      _ when d.when != null && d.type == HelpType.itens =>
-        '${goal?.item ?? 'Itens'} · entrega em ${Fmt.day(d.when!)}',
+      // Antes do prazo a linha fala da meta; depois dele, do doador. Quem
+      // está esperando passa a ser a informação mais importante da linha.
+      _ when d.overdue => '${d.donor} espera há ${d.waitingDays} dias · prazo era ${Fmt.day(d.deadline)}',
+      _ when d.when != null && d.type == HelpType.itens => '${goal?.item ?? 'Itens'} · entrega em ${Fmt.day(d.when!)}',
       _ => goal?.headline ?? 'Doação sem meta',
     };
     return Pressable(
@@ -328,8 +335,9 @@ class _DonationRow extends StatelessWidget {
                       ),
                       if (d.receipt || d.receiptPath != null) ...[
                         const SizedBox(width: 6),
-                        const Icon(PhosphorIconsRegular.paperclip, size: 14, color: AppColors.cinza500),
+                        const Icon(PhosphorIconsBold.paperclip, size: 14, color: AppColors.cinza500),
                       ],
+                      if (d.overdue) ...[const SizedBox(width: 6), const _Atrasada()],
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -337,10 +345,7 @@ class _DonationRow extends StatelessWidget {
                     segunda,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppType.body(
-                      size: 13,
-                      color: d.status == DonationStatus.notFound ? AppColors.cinza600 : AppColors.cinza600,
-                    ),
+                    style: AppType.body(size: 13, color: d.overdue ? AppColors.ocre700 : AppColors.cinza600),
                   ),
                 ],
               ),
@@ -363,7 +368,7 @@ class _DonationRow extends StatelessWidget {
               ],
             ),
             const SizedBox(width: 6),
-            const Icon(PhosphorIconsRegular.caretRight, size: 16, color: AppColors.cinza400),
+            const Icon(PhosphorIconsBold.caretRight, size: 16, color: AppColors.cinza400),
           ],
         ),
       ),
@@ -575,5 +580,26 @@ class _Mark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChoiceChipPill(label: label, selected: on, onTap: onTap);
+  }
+}
+
+/// O selo de prazo vencido, na linha da fila.
+class _Atrasada extends StatelessWidget {
+  const _Atrasada();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(7, 2, 8, 3),
+      decoration: BoxDecoration(color: AppColors.ocre50, borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(PhosphorIconsBold.hourglassMedium, size: 11, color: AppColors.ocre700),
+          const SizedBox(width: 4),
+          Text('Passou do prazo', style: AppType.label(size: 11.5, color: AppColors.ocre700)),
+        ],
+      ),
+    );
   }
 }

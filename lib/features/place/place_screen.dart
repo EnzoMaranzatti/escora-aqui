@@ -65,62 +65,88 @@ class _PlaceScreenState extends State<PlaceScreen> {
             backgroundColor: AppColors.cinza50,
             body: Stack(
               children: [
+                // A foto fica parada no fundo; é a folha que sobe por cima
+                // dela quando a pessoa arrasta.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: _heroH(context),
+                  child: _Hero(place: p, map: _map, distance: p.kmFrom(here)),
+                ),
                 CustomScrollView(
                   slivers: [
-                    SliverToBoxAdapter(
-                      child: _Header(place: p, map: _map),
-                    ),
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 16, pad.bottom + 32),
-                      sliver: SliverList.list(
-                        children: [
-                          Reveal(
-                            offset: 10,
-                            child: _Identity(place: p, distance: p.kmFrom(here)),
-                          ),
-                          const SizedBox(height: 28),
-                          if (p.pixPaused) ...[
-                            const NoticeBanner(
-                              tone: Tone.alert,
-                              text: 'Doações via Pix pausadas enquanto a instituição atualiza seus dados.',
-                            ),
-                            const SizedBox(height: 20),
-                          ],
-                          Reveal(
-                            delay: const Duration(milliseconds: 80),
-                            child: _Needs(place: p, preview: widget.preview),
-                          ),
-                          if (!widget.preview &&
-                              !p.pixPaused &&
-                              p.accepts.contains(HelpType.pix) &&
-                              (p.pixKey ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            MonthlyCta(place: p),
-                          ],
-                          if ((p.distributes ?? '').trim().isNotEmpty) ...[
-                            const SizedBox(height: 28),
-                            const SectionTitle('O que distribui'),
-                            AppCard(
-                              child: Text(p.distributes!, style: AppType.body(size: 15.5, color: AppColors.cinza700)),
-                            ),
-                          ],
-                          const SizedBox(height: 28),
-                          const SectionTitle('Sobre'),
-                          _About(place: p),
-                          const SizedBox(height: 28),
-                          _Reviews(place: p),
-                          if (!widget.preview) ...[
-                            const SizedBox(height: 28),
+                    // Espaço vazio do tamanho da foto: o que rola é a folha.
+                    SliverToBoxAdapter(child: SizedBox(height: _heroH(context) - 26)),
+                    DecoratedSliver(
+                      decoration: const BoxDecoration(
+                        color: AppColors.cinza50,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                      ),
+                      sliver: SliverPadding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, pad.bottom + 32),
+                        sliver: SliverList.list(
+                          children: [
+                            // A alça diz que esta folha sobe por cima da foto.
                             Center(
-                              child: LinkText(
-                                'Denunciar este ponto',
-                                icon: PhosphorIconsRegular.flag,
-                                color: AppColors.cinza600,
-                                onTap: () => context.push(ReportScreen(placeId: p.id)),
+                              child: Container(
+                                width: 44,
+                                height: 5,
+                                margin: const EdgeInsets.only(top: 10, bottom: 18),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cinza300,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
                               ),
                             ),
+                            Reveal(
+                              offset: 10,
+                              child: _Identity(place: p, distance: p.kmFrom(here)),
+                            ),
+                            const SizedBox(height: 28),
+                            if (p.pixPaused) ...[
+                              const NoticeBanner(
+                                tone: Tone.alert,
+                                text: 'Doações via Pix pausadas enquanto a instituição atualiza seus dados.',
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                            Reveal(
+                              delay: const Duration(milliseconds: 80),
+                              child: _Needs(place: p, preview: widget.preview),
+                            ),
+                            if (!widget.preview &&
+                                !p.pixPaused &&
+                                p.accepts.contains(HelpType.pix) &&
+                                (p.pixKey ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              MonthlyCta(place: p),
+                            ],
+                            if ((p.distributes ?? '').trim().isNotEmpty) ...[
+                              const SizedBox(height: 28),
+                              const SectionTitle('O que distribui'),
+                              AppCard(
+                                child: Text(p.distributes!, style: AppType.body(size: 15.5, color: AppColors.cinza700)),
+                              ),
+                            ],
+                            const SizedBox(height: 28),
+                            const SectionTitle('Sobre'),
+                            _About(place: p),
+                            const SizedBox(height: 28),
+                            _Reviews(place: p),
+                            if (!widget.preview) ...[
+                              const SizedBox(height: 28),
+                              Center(
+                                child: LinkText(
+                                  'Denunciar este ponto',
+                                  icon: PhosphorIconsRegular.flag,
+                                  color: AppColors.cinza600,
+                                  onTap: () => context.push(ReportScreen(placeId: p.id)),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ],
@@ -139,63 +165,157 @@ class _PlaceScreenState extends State<PlaceScreen> {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.place, required this.map});
+/// A altura da foto: quase metade da tela, como numa capa. É ela que faz a
+/// pessoa reconhecer o lugar antes de ler qualquer coisa.
+double _heroH(BuildContext context) {
+  final h = MediaQuery.sizeOf(context).height;
+  return (h * .46).clamp(280.0, 420.0);
+}
+
+/// A capa do ponto: foto grande, o nome por cima e, quando não há foto, o
+/// mapa com o pino no lugar dela.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.place, required this.map, required this.distance});
 
   final Place place;
   final MapController map;
+  final double distance;
 
   @override
   Widget build(BuildContext context) {
     final pad = MediaQuery.paddingOf(context);
-    final h = 230 + pad.top;
     final photo = place.image;
-    return SizedBox(
-      height: h,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (photo != null)
-            Image(image: photo, fit: BoxFit.cover)
-          else
-            IgnorePointer(
-              child: EscoraMap(
-                controller: map,
-                initialCenter: place.point,
-                initialZoom: 15.4,
-                interactive: false,
-                children: [
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        point: place.point,
-                        width: 72,
-                        height: 72,
-                        child: Center(
-                          child: InstitutionPin(
-                            icon: place.kind.icon,
-                            color: place.primaryType.color,
-                            ring: place.primaryType.ring,
-                            size: 44,
-                            selected: true,
-                          ),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (photo != null)
+          Image(image: photo, fit: BoxFit.cover)
+        else
+          IgnorePointer(
+            child: EscoraMap(
+              controller: map,
+              initialCenter: place.point,
+              initialZoom: 15.4,
+              interactive: false,
+              children: [
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: place.point,
+                      width: 72,
+                      height: 72,
+                      child: Center(
+                        child: InstitutionPin(
+                          icon: place.kind.icon,
+                          color: place.primaryType.color,
+                          ring: place.primaryType.ring,
+                          size: 44,
+                          selected: true,
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          // Fade into the page, full width, no visible edge.
-          const DecoratedBox(
+          ),
+        // Escurece só o pé da foto, onde entra o nome.
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [.35, 1],
+              colors: [Color(0x00000000), Color(0x9E000000)],
+            ),
+          ),
+        ),
+        // E clareia o topo, para a hora e a bateria continuarem legíveis.
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          height: pad.top + 16,
+          child: const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: [0, .55, 1],
-                colors: [Color(0x00F8F6F3), Color(0x00F8F6F3), AppColors.cinza50],
+                stops: [0, 1],
+                colors: [Color(0x59FFFFFF), Color(0x00FFFFFF)],
               ),
             ),
+          ),
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 52,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${place.typeLabel} · ${place.neighborhood}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppType.body(
+                  size: 13.5,
+                  color: AppColors.white,
+                ).copyWith(shadows: const [Shadow(color: Color(0x73000000), blurRadius: 8)]),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                place.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppType.display(
+                  size: 29,
+                  color: AppColors.white,
+                ).copyWith(height: 1.1, shadows: const [Shadow(color: Color(0x8C000000), blurRadius: 14)]),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (place.verifiedAt != null) ...[
+                    const _GlassTag(icon: PhosphorIconsFill.sealCheck, label: 'Verificado'),
+                    const SizedBox(width: 8),
+                  ],
+                  _GlassTag(icon: PhosphorIconsRegular.mapPin, label: 'a ${Fmt.km(distance)}'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Etiqueta de vidro sobre a foto.
+class _GlassTag extends StatelessWidget {
+  const _GlassTag({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(9, 5, 11, 5),
+      decoration: BoxDecoration(
+        color: AppColors.white.withValues(alpha: .22),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.white.withValues(alpha: .4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon.bold, size: 13, color: AppColors.white),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppType.strong(size: 12.5, color: AppColors.white).copyWith(fontFeatures: tabular),
           ),
         ],
       ),
@@ -215,10 +335,6 @@ class _Identity extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(place.name, style: AppType.display(size: 28)),
-        const SizedBox(height: 4),
-        Text('${place.typeLabel} · ${place.neighborhood}', style: AppType.body(size: 15.5)),
-        const SizedBox(height: 12),
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 10,
@@ -228,17 +344,29 @@ class _Identity extends StatelessWidget {
             if (verified != null) LinkText('O que verificamos', onTap: () => showVerifiedSheet(context, place)),
           ],
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            const Icon(PhosphorIconsRegular.mapPin, size: 16, color: AppColors.cinza600),
-            const SizedBox(width: 4),
-            Text('a ${Fmt.km(distance)} de você', style: AppType.body(size: 14.5)),
+        const SizedBox(height: 16),
+        // Distância, gente e metas na mesma régua do perfil. Antes só a
+        // distância aparecia, solta numa linha: quem chega a um ponto pela
+        // primeira vez não tinha como medir se ali já aconteceu alguma coisa.
+        // A distância já está na capa, em cima da foto: aqui entra o que
+        // conta a história do ponto.
+        StatStrip(
+          stats: [
+            Stat('$_abertas', _abertas == 1 ? 'meta aberta' : 'metas abertas'),
+            Stat('$_ajudaram', _ajudaram == 1 ? 'pessoa já ajudou' : 'pessoas já ajudaram'),
+            Stat('$_concluidas', _concluidas == 1 ? 'meta concluída' : 'metas concluídas', tone: AppColors.petroleo700),
           ],
         ),
       ],
     );
   }
+
+  int get _abertas => place.openGoals.length;
+
+  /// Quem teve a doação confirmada, somando todas as metas do ponto.
+  int get _ajudaram => place.goals.fold(0, (soma, g) => soma + g.helpers);
+
+  int get _concluidas => place.goals.where((g) => g.status == GoalStatus.done).length;
 }
 
 /// "Como este ponto foi verificado": says exactly what is checked and
@@ -464,7 +592,7 @@ class _Line extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: AppColors.cinza600),
+          Icon(icon.bold, size: 18, color: AppColors.cinza600),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

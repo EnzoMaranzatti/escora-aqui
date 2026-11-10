@@ -9,20 +9,24 @@ import '../../core/theme/app_typography.dart';
 import '../../core/widgets/app_text_field.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/kit.dart';
+import '../../core/widgets/pills.dart';
 import '../../core/widgets/reveal.dart';
 import '../../core/widgets/scaffolds.dart';
 import '../../core/widgets/sheets.dart';
 import '../../data/store.dart';
+import 'donation_detail_screen.dart';
 import '../donate/monthly_screen.dart';
 import '../map/pins.dart';
 import '../donate/pix_screen.dart';
-import '../place/place_screen.dart';
 import '../shared/help_ui.dart';
 import '../shell/donor_shell.dart';
 
 /// Tab "Doações": what the person did and the status of each donation.
 class DonationsScreen extends StatefulWidget {
-  const DonationsScreen({super.key});
+  const DonationsScreen({super.key, this.standalone = false});
+
+  /// Empurrada a partir do perfil (e não mais uma aba): ganha o voltar.
+  final bool standalone;
 
   @override
   State<DonationsScreen> createState() => _DonationsScreenState();
@@ -49,6 +53,7 @@ class _DonationsScreenState extends State<DonationsScreen> {
         final confirmed = store.confirmedCount;
         return TabPage(
           title: 'Minhas doações',
+          leading: widget.standalone ? const BackPill(style: PillStyle.solid) : null,
           subtitle: all.isEmpty
               ? null
               : Text(
@@ -88,7 +93,7 @@ class _DonationsScreenState extends State<DonationsScreen> {
                       title: 'Você ainda não fez nenhuma doação.',
                       text: 'Quando você ajudar um ponto, o histórico e a confirmação aparecem aqui.',
                       primary: 'Ver pontos perto de você',
-                      onPrimary: () => goToTab(context, 0),
+                      onPrimary: () => goToTab(context, mapTab),
                     ),
                   ),
                 ),
@@ -168,7 +173,9 @@ class _DonationTile extends StatelessWidget {
       _ => ('', Tone.neutral, '', null),
     };
     return AppCard(
-      onTap: () => context.push(PlaceScreen(placeId: p.id)),
+      // O cartão abre o andamento da doação, não o ponto: quem toca aqui quer
+      // saber em que pé a doação está. O ponto fica a um toque de lá.
+      onTap: () => context.push(DonationDetailScreen(d.id)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -275,7 +282,7 @@ class _RateSheetState extends State<_RateSheet> {
         const SizedBox(height: 12),
         Row(
           children: [
-            const Icon(PhosphorIconsRegular.info, size: 16, color: AppColors.cinza600),
+            const Icon(PhosphorIconsBold.info, size: 16, color: AppColors.cinza600),
             const SizedBox(width: 6),
             Expanded(
               child: Text(

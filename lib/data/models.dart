@@ -438,7 +438,45 @@ class Donation {
 
   bool get pending =>
       status == DonationStatus.waiting || status == DonationStatus.itemsAgreed || status == DonationStatus.enrolled;
+
+  // ── Prazo de confirmação ────────────────────────────────────────────
+  //
+  // Quem doa por Pix manda o dinheiro direto para a conta da instituição e
+  // some: o app não tem como saber que chegou, só a instituição tem. Sem um
+  // prazo combinado, "aguardando confirmação" não quer dizer nada — pode ser
+  // hoje à tarde ou nunca, e é essa dúvida que faz a pessoa achar que caiu
+  // num golpe. Com prazo, os dois lados sabem quando a espera deixou de ser
+  // normal: o doador ganha um caminho, e a instituição, uma cobrança.
+
+  /// Até quando a instituição deveria ter conferido.
+  DateTime get deadline => date.add(confirmWindow);
+
+  /// Dias corridos de espera.
+  int get waitingDays => DateTime.now().difference(date).inDays;
+
+  /// Dias que ainda faltam (0 = vence hoje). Negativo depois do prazo.
+  int get daysLeft => deadline.difference(DateTime.now()).inDays;
+
+  /// Parada esperando alguém da instituição olhar. `itemsAgreed` e
+  /// `enrolled` já são resposta: lá alguém viu e combinou.
+  bool get awaiting => status == DonationStatus.waiting;
+
+  /// Passou do prazo sem ninguém olhar.
+  bool get overdue => awaiting && DateTime.now().isAfter(deadline);
+
+  /// Quanto da espera já correu, de 0 a 1. É o que a barra do prazo desenha.
+  double get waitProgress {
+    final total = confirmWindow.inMinutes;
+    final feito = DateTime.now().difference(date).inMinutes;
+    return (feito / total).clamp(0.0, 1.0);
+  }
 }
+
+/// O prazo que a instituição tem para conferir uma doação registrada.
+///
+/// Três dias é o que a própria tela de doação já prometia ("costuma levar
+/// até 3 dias"); aqui a promessa vira regra, com consequência dos dois lados.
+const confirmWindow = Duration(days: 3);
 
 /// A donor's promise to send a Pix to one point every month. The app
 /// doesn't move money: on [day] it reminds the donor, who pays in the bank
@@ -699,8 +737,7 @@ class PointsProfile {
   }
 
   /// How far the next level is, along whichever of the three tracks is closest.
-  double get levelProgress =>
-      level.next == null ? 1 : tracks.map((t) => t.progress).reduce((a, b) => a > b ? a : b);
+  double get levelProgress => level.next == null ? 1 : tracks.map((t) => t.progress).reduce((a, b) => a > b ? a : b);
 
   /// The track that gets to the next level first, and what's still missing on
   /// it. Null on the last level.
