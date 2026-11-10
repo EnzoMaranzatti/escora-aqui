@@ -48,6 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     try {
       await entrar(email: _email.trim(), senha: _password);
+      await _carregar();
     } on AuthException catch (erro) {
       _fail(mensagemDeErro(erro));
       return;
@@ -58,6 +59,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     _entrou();
   }
+
+  /// Traz os dados da conta antes de decidir para onde ela vai. Só o shell
+  /// do doador chamava `store.init()`: a equipe caía no painel com a fila
+  /// vazia (ninguém tinha carregado nada), e a conta de parceiro nunca era
+  /// reconhecida aqui, porque `store.myPartner` vem desse carregamento.
+  Future<void> _carregar() => store.init();
 
   /// Cada conta cai no seu lugar. Equipe e parceiro não passam pelo mapa:
   /// a conta existe para um objetivo só, e o mapa de doações não é dele.
@@ -86,6 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final bool signedIn;
     try {
       signedIn = await entrarComGoogle();
+      if (signedIn) await _carregar();
     } on AuthException catch (erro) {
       _fail(mensagemDeErro(erro));
       return;

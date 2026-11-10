@@ -169,6 +169,12 @@ List<Widget> _startStack(bool loggedIn) {
   const start = String.fromEnvironment('START');
   if (start.isEmpty) {
     if (!loggedIn) return [const SplashScreen()];
+    // Conta da equipe abre no painel, como no login: ela não tem modo
+    // doador. Sem isto, fechar e abrir o app jogava a equipe no mapa.
+    if (store.isTeam) {
+      store.setMode(AppMode.team);
+      return [const TeamShell()];
+    }
     // Conta de parceiro abre no balcão: é a única coisa que ela faz aqui.
     if (store.myPartner != null) {
       store.setMode(AppMode.partner);
