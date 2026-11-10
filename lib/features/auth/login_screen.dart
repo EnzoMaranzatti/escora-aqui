@@ -19,7 +19,10 @@ import '../../core/widgets/ripple_backdrop.dart';
 import '../../core/widgets/segment_progress.dart';
 import '../../core/widgets/sheets.dart';
 import '../../data/auth.dart';
+import '../../data/store.dart';
 import '../shell/donor_shell.dart';
+import '../partner/partner_shell.dart';
+import '../team/team_shell.dart';
 import 'partner_login_screen.dart';
 import '../intro/intro_screen.dart';
 import 'reset_password_screen.dart';
@@ -53,6 +56,22 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     if (!mounted) return;
+    _entrou();
+  }
+
+  /// Cada conta cai no seu lugar. Equipe e parceiro não passam pelo mapa:
+  /// a conta existe para um objetivo só, e o mapa de doações não é dele.
+  void _entrou() {
+    if (store.isTeam) {
+      store.setMode(AppMode.team);
+      context.replaceAll(const TeamShell());
+      return;
+    }
+    if (store.myPartner != null) {
+      store.setMode(AppMode.partner);
+      context.replaceAll(const PartnerShell());
+      return;
+    }
     context.replaceAll(const DonorShell());
   }
 
@@ -76,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     if (!mounted) return;
     if (!signedIn) return setState(() => _loading = false);
-    context.replaceAll(const DonorShell());
+    _entrou();
   }
 
   void _forgot() => context.push(ResetPasswordScreen(email: _email.trim()));

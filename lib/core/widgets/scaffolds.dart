@@ -434,11 +434,21 @@ class _NavCell extends StatelessWidget {
 /// Strip pinned to the top while the institution or team mode is on, so
 /// the person always knows whose donations they are looking at.
 class ModeStrip extends StatelessWidget {
-  const ModeStrip({super.key, required this.label, required this.onExit, this.icon = PhosphorIconsFill.storefront});
+  const ModeStrip({
+    super.key,
+    required this.label,
+    required this.onExit,
+    this.icon = PhosphorIconsFill.storefront,
+    this.action = 'Voltar ao modo doador',
+  });
 
   final String label;
   final VoidCallback onExit;
   final IconData icon;
+
+  /// Texto do botão à direita. A equipe e o parceiro não têm modo doador:
+  /// a conta deles serve a um objetivo só, então ali a saída é da conta.
+  final String action;
 
   @override
   Widget build(BuildContext context) {
@@ -469,7 +479,7 @@ class ModeStrip extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'Voltar ao modo doador',
+                  action,
                   style: AppType.label(color: AppColors.white, size: 12.5).copyWith(fontWeight: FontWeight.w600),
                 ),
               ),

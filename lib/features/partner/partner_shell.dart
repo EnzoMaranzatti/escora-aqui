@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/icons.dart';
 import '../../core/routes.dart';
 import '../../core/widgets/scaffolds.dart';
+import '../../core/widgets/sheets.dart';
+import '../../data/auth.dart';
 import '../../data/store.dart';
-import '../shell/donor_shell.dart';
+import '../splash/splash_screen.dart';
 import 'coupons_screen.dart';
 import 'validate_screen.dart';
 
@@ -47,10 +49,21 @@ class _PartnerShellState extends State<PartnerShell> {
     if (mounted) setState(() {});
   }
 
-  void _exit() {
+  /// A conta do parceiro não tem modo doador: ela serve a um objetivo só, e o
+  /// mapa de doações não é dela. Então a saída daqui é a saída da conta.
+  Future<void> _exit() async {
+    final ok = await confirmSheet(
+      context,
+      title: 'Sair da conta?',
+      text: 'Para validar cupons de novo, basta entrar com o e-mail da empresa.',
+      confirm: 'Sair da conta',
+      cancel: 'Continuar',
+    );
+    if (ok == null || !mounted) return;
     store.setMode(AppMode.donor);
-    donorTab.value = profileTab;
-    context.replaceAll(const DonorShell());
+    await sair();
+    if (!mounted) return;
+    context.replaceAll(const SplashScreen(startAtEnd: true));
   }
 
   @override
@@ -59,7 +72,7 @@ class _PartnerShellState extends State<PartnerShell> {
     final esperando = store.partnerCoupons.fold<int>(0, (soma, c) => soma + c.pending);
     return TabShell(
       index: partnerTab.value,
-      strip: ModeStrip(label: 'Você está no modo parceiro · $nome', onExit: _exit),
+      strip: ModeStrip(label: 'Modo parceiro · $nome', onExit: _exit, action: 'Sair da conta'),
       pages: [ValidateScreen(demo: widget.demo), const CouponsScreen()],
       bar: AppNavBar(
         index: partnerTab.value,

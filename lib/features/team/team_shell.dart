@@ -3,8 +3,10 @@ import '../../core/icons.dart';
 
 import '../../core/routes.dart';
 import '../../core/widgets/scaffolds.dart';
+import '../../core/widgets/sheets.dart';
+import '../../data/auth.dart';
 import '../../data/store.dart';
-import '../shell/donor_shell.dart';
+import '../splash/splash_screen.dart';
 import 'team_points.dart';
 import 'team_queue.dart';
 import 'team_reports.dart';
@@ -36,10 +38,21 @@ class _TeamShellState extends State<TeamShell> {
     if (mounted) setState(() {});
   }
 
-  void _exit() {
+  /// A conta do equipe não tem modo doador: ela serve a um objetivo só, e o
+  /// mapa de doações não é dela. Então a saída daqui é a saída da conta.
+  Future<void> _exit() async {
+    final ok = await confirmSheet(
+      context,
+      title: 'Sair da conta?',
+      text: 'Os cadastros e as denúncias continuam na fila para quando você voltar.',
+      confirm: 'Sair da conta',
+      cancel: 'Continuar',
+    );
+    if (ok == null || !mounted) return;
     store.setMode(AppMode.donor);
-    donorTab.value = profileTab;
-    context.replaceAll(const DonorShell());
+    await sair();
+    if (!mounted) return;
+    context.replaceAll(const SplashScreen(startAtEnd: true));
   }
 
   @override
@@ -48,7 +61,12 @@ class _TeamShellState extends State<TeamShell> {
     final reports = store.openReports.length;
     return TabShell(
       index: _tab,
-      strip: ModeStrip(label: 'Painel da equipe', icon: PhosphorIconsFill.shieldCheck, onExit: _exit),
+      strip: ModeStrip(
+        label: 'Painel da equipe',
+        icon: PhosphorIconsFill.shieldCheck,
+        onExit: _exit,
+        action: 'Sair da conta',
+      ),
       pages: const [TeamQueueScreen(), TeamReportsScreen(), TeamPointsScreen()],
       bar: AppNavBar(
         index: _tab,
