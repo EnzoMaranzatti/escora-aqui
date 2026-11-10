@@ -1,21 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/icons.dart';
+import '../../core/routes.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/widgets/charts.dart';
 import '../../core/widgets/kit.dart';
 import '../../core/widgets/scaffolds.dart';
+import '../../core/widgets/sheets.dart';
 import '../../data/store.dart';
+import 'coupon_form_screen.dart';
 
-/// O que esta empresa oferece no catálogo e o que já saiu dele. O parceiro
-/// não edita nada aqui: quem monta o catálogo é a equipe, em contrato. A
-/// tela existe para ele saber quantos cupons ainda podem bater na porta.
+/// O que esta empresa oferece no catálogo e o que já saiu dele: quantos
+/// cupons ainda podem bater na porta, e a porta para criar outro.
+///
+/// Até a fase 11 o parceiro não mexia em nada aqui — quem montava o
+/// catálogo era a equipe, no banco. Desde a fase 12 o cupom é da empresa:
+/// ela cria ("Novo cupom") e tira do ar. Só não apaga, porque quem já
+/// trocou pontos continua com o código na mão.
 class CouponsScreen extends StatelessWidget {
   const CouponsScreen({super.key});
 
+  // A tela escuta o `store` por conta própria. O shell também escuta, mas
+  // ele guarda esta aba como `const CouponsScreen()`: a instância é sempre a
+  // mesma, e o Flutter não reconstrói um widget idêntico. Sem o
+  // `ListenableBuilder` a lista ficava com a foto do primeiro desenho — um
+  // cupom recém-publicado só aparecia depois de sair e entrar no app.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: store, builder: (context, _) => _page(context));
+
+  Widget _page(BuildContext context) {
     final cupons = store.partnerCoupons;
     final trocados = cupons.fold<int>(0, (s, c) => s + c.redeemed);
     final usados = cupons.fold<int>(0, (s, c) => s + c.used);
@@ -25,6 +40,17 @@ class CouponsScreen extends StatelessWidget {
     return TabPage(
       title: 'Meus cupons',
       onRefresh: store.loadPartnerCoupons,
+      // Criar é uma ação, não um lugar: por isso mora aqui, ao lado do
+      // título, e não como terceira aba da barra de baixo.
+      trailing: cupons.isEmpty
+          ? null
+          : SoftButton(
+              label: 'Novo cupom',
+              icon: PhosphorIconsBold.plus,
+              filled: true,
+              height: 40,
+              onTap: () => context.push(const CouponFormScreen()),
+            ),
       subtitle: Text(
         cupons.isEmpty
             ? 'O que a sua empresa oferece no catálogo do Escora aqui.'
@@ -35,11 +61,13 @@ class CouponsScreen extends StatelessWidget {
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
           sliver: cupons.isEmpty
-              ? const SliverToBoxAdapter(
+              ? SliverToBoxAdapter(
                   child: EmptyState(
                     icon: PhosphorIconsRegular.ticket,
                     title: 'Nenhum cupom ainda.',
-                    text: 'Quando a equipe publicar um cupom desta empresa no catálogo, ele aparece aqui.',
+                    text: 'Crie o primeiro: ele entra no catálogo na hora, e quem doa troca pontos por ele.',
+                    primary: 'Criar cupom',
+                    onPrimary: () => context.push(const CouponFormScreen()),
                   ),
                 )
               : SliverList.list(
@@ -203,10 +231,51 @@ class _CouponCard extends StatelessWidget {
             const Hairline(indent: 16),
             _Conta('Nível mínimo', coupon.minLevel.label),
           ],
-          const SizedBox(height: 6),
+          const Hairline(indent: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: fora
+                ? SoftButton(
+                    label: 'Voltar ao catálogo',
+                    filled: true,
+                    expand: true,
+                    onTap: () => _mudar(context, true),
+                  )
+                : SoftButton(label: 'Tirar do catálogo', expand: true, onTap: () => _mudar(context, false)),
+          ),
         ],
       ),
     );
+  }
+
+  /// Tirar pede confirmação, porque some da vista de quem doa; voltar não —
+  /// é só desfazer.
+  Future<void> _mudar(BuildContext context, bool ativo) async {
+    if (!ativo) {
+      final esperando = coupon.pending;
+      final ok = await confirmSheet(
+        context,
+        title: 'Tirar do catálogo?',
+        text:
+            'Ninguém mais vai conseguir trocar pontos por "${coupon.title}". '
+            '${esperando == 0
+                ? 'Você pode voltar com ele quando quiser.'
+                : esperando == 1
+                ? 'A pessoa que já trocou continua com o código valendo.'
+                : 'As $esperando pessoas que já trocaram continuam com o código valendo.'}',
+        confirm: 'Tirar do catálogo',
+        cancel: 'Manter',
+      );
+      if (ok == null || !context.mounted) return;
+    }
+    final erro = await store.setCouponActive(coupon, ativo);
+    if (!context.mounted) return;
+    if (erro != null) {
+      Toast.show(context, erro, icon: PhosphorIconsFill.warningCircle);
+      return;
+    }
+    HapticFeedback.selectionClick();
+    Toast.show(context, ativo ? 'O cupom voltou ao catálogo.' : 'O cupom saiu do catálogo.');
   }
 }
 

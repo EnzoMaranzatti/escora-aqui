@@ -560,6 +560,52 @@ class AppStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Publica um cupom novo da empresa. Devolve null quando deu certo, ou a
+  /// frase do banco quando ele recusa — o formulário mostra embaixo do
+  /// campo, então aqui nada vai para o toast geral.
+  Future<String?> createCoupon({
+    required String title,
+    required String description,
+    required int cost,
+    required PointsLevel minLevel,
+    int? stock,
+  }) async {
+    try {
+      await remote.partnerCreateItem(
+        title: title,
+        description: description,
+        cost: cost,
+        minLevel: minLevel,
+        stock: stock,
+      );
+    } catch (e) {
+      debugPrint('store: create coupon failed: $e');
+      return _message(e);
+    }
+    await loadPartnerCoupons();
+    return null;
+  }
+
+  /// Tira o cupom do catálogo ou põe de volta. A tela muda na hora e volta
+  /// atrás se o banco recusar (o teto de 12 cupons no ar, por exemplo).
+  Future<String?> setCouponActive(PartnerCoupon c, bool active) async {
+    final i = partnerCoupons.indexWhere((x) => x.id == c.id);
+    if (i >= 0) {
+      partnerCoupons[i] = c.copyWith(active: active);
+      notifyListeners();
+    }
+    try {
+      await remote.partnerSetItemActive(c.id, active);
+    } catch (e) {
+      debugPrint('store: set coupon active failed: $e');
+      if (i >= 0 && i < partnerCoupons.length) partnerCoupons[i] = c;
+      notifyListeners();
+      return _message(e);
+    }
+    unawaited(loadPartnerCoupons());
+    return null;
+  }
+
   /// Procura um cupom pelo código. Devolve null quando o banco recusa — a
   /// mensagem dele ("Cupom não encontrado.") vai para quem chamou.
   Future<({CouponLookup? coupon, String? error})> findCoupon(String code) async {

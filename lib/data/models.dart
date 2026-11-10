@@ -874,6 +874,21 @@ class PartnerCoupon {
   /// Trocados que ainda não apareceram no balcão.
   int get pending => redeemed - used;
 
+  /// O mesmo cupom, dentro ou fora do catálogo (a única coisa que o
+  /// parceiro muda num cupom já publicado).
+  PartnerCoupon copyWith({required bool active}) => PartnerCoupon(
+    id: id,
+    title: title,
+    description: description,
+    cost: cost,
+    minLevel: minLevel,
+    redeemed: redeemed,
+    used: used,
+    stock: stock,
+    active: active,
+    photoPath: photoPath,
+  );
+
   bool get soldOut => stock != null && stock! <= 0;
 }
 

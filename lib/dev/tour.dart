@@ -28,6 +28,7 @@ import '../features/home/home_screen.dart' show mapDemo;
 import '../features/profile/edit_profile_screen.dart';
 import '../features/place/report_screen.dart';
 import '../features/shell/donor_shell.dart';
+import '../features/partner/coupon_form_screen.dart';
 import '../features/team/team_queue.dart';
 import '../features/team/team_shell.dart';
 
@@ -305,6 +306,12 @@ class _TourScreenState extends State<TourScreen> {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           partnerTab.value = name == 'partner-coupons' ? 1 : 0;
         });
+      // O formulário de cupom novo, por cima do modo parceiro.
+      case 'partner-new-coupon':
+        _fakePartner();
+        store.setMode(AppMode.partner);
+        setState(() => _root = 'partner');
+        push = const CouponFormScreen();
       case 'team' || 'team-review':
         store.setMode(AppMode.team);
         setState(() => _root = 'team');

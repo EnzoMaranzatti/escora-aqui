@@ -102,6 +102,8 @@ conferem quem chama.
 | Pontos | login diário (a cada sessão aberta) | `register_daily_login()` |
 | | canjear um cupom do catálogo | `redeem_catalog_item()` |
 | | pontos da doação | ninguém chama: saem do gatilho `donations_after_status`, quando a instituição confirma |
+| Parceiro | `findCoupon`, `useCoupon` | `partner_find_redemption()`, `partner_use_redemption()` |
+| | `createCoupon`, `setCouponActive` | `partner_create_item()`, `partner_set_item_active()` |
 
 ## 5. Regras de negócio (todas no banco)
 
@@ -148,8 +150,9 @@ banco, e `points_profiles` não tem política de INSERT nem de UPDATE.
   (`redemptions.code`, tipo `ESC-A1B2C3`), que é o que a pessoa mostra no
   parceiro. Um item fora do catálogo (`active` false) continua visível para
   quem já trocou, senão a tela de trocas perderia o nome do cupom.
-  Parceiros e itens do catálogo são cadastrados direto no banco pela equipe,
-  como os dados de demonstração — não há tela para isso.
+  Parceiros são cadastrados direto no banco pela equipe, como os dados de
+  demonstração — não há tela para isso. Os itens do catálogo eram também, até
+  a fase 12: hoje é a própria empresa que cria os dela (ver abaixo).
 
 ### Parceiro (fase 10)
 
@@ -185,6 +188,43 @@ No app isso é o `AppMode.partner`, com duas abas (Validar · Cupons). A porta
 de entrada é o link **"Sou parceiro"** na tela de entrar, que leva a um login
 próprio, sem Google e sem "criar conta". Uma conta que não é de parceiro é
 desconectada ali mesmo, com a mensagem de usar a tela normal.
+
+### O parceiro cria os próprios cupons (fase 12)
+
+Migração `20261110170000_fase12_parceiro_cria_cupom.sql`. Até a fase 11 a
+empresa só dava baixa: cada cupom novo dependia de alguém da equipe abrir o
+painel. O contrato continua sendo com a equipe — é ela quem liga a conta à
+empresa (`partners.owner_id`) —, mas, com a empresa ligada, **o cupom é
+dela**.
+
+`catalog_items` continua **sem** política de INSERT/UPDATE. Tudo passa por
+duas funções `SECURITY DEFINER`, que são o único lugar onde as regras moram:
+
+- **`partner_create_item(p_title, p_description, p_points_cost, p_min_level,
+  p_stock)`** cria o cupom já no ar e devolve o id. Ele sempre nasce na
+  empresa de quem chamou (`my_partner_id()`), então não dá para criar em nome
+  de outra. O banco recusa, com a frase em português que o app mostra:
+  nome fora de 3–60 letras; descrição acima de 200; custo fora de **50 a
+  5.000 pontos** ou que não seja de 10 em 10; quantidade fora de 1–9.999
+  (nula = sem limite); nome igual ao de outro cupom da empresa que esteja no
+  ar; e a empresa já ter **12 cupons no ar**.
+  O piso e o teto de pontos existem porque o ponto é a moeda do app inteiro:
+  um cupom de 1 ponto esvaziaria o sentido de doar, e o teto segura erro de
+  digitação. O teto de 12 evita que o catálogo do doador vire vitrine de uma
+  loja só.
+- **`partner_set_item_active(p_item, p_active)`** tira do catálogo e põe de
+  volta (voltar passa pelo mesmo teto de 12). **Não existe apagar**: quem já
+  trocou pontos continua com o código valendo (`redemptions` é `ON DELETE
+  RESTRICT`) e o parceiro continua podendo dar baixa.
+- O cupom criado pelo parceiro nasce **sem foto** (`photo_path` nulo): as
+  fotos do catálogo são arquivos dentro do app, e o card já cai no ícone
+  quando não há. Foto escolhida pelo parceiro precisaria de Storage.
+- As duas funções têm `REVOKE ... FROM PUBLIC, anon` e `GRANT EXECUTE TO
+  authenticated`; quem não é parceiro recebe "Esta conta não é de um
+  parceiro.".
+
+No app é o botão **"Novo cupom"** na aba Cupons (`CouponFormScreen`) e o
+"Tirar do catálogo" / "Voltar ao catálogo" no pé de cada cupom.
 
 ### Contato de quem doou (fase 11)
 

@@ -14,8 +14,9 @@ import 'validate_screen.dart';
 final partnerTab = ValueNotifier<int>(0);
 
 /// Modo parceiro: a empresa que dá os cupons do catálogo entra para
-/// conferir o código que a pessoa mostra no balcão. Duas abas só — o
-/// parceiro não cadastra nada, quem monta o catálogo é a equipe.
+/// conferir o código que a pessoa mostra no balcão e para cuidar dos
+/// próprios cupons. Duas abas só — criar um cupom é um botão dentro de
+/// "Cupons", não uma terceira aba: a barra guarda lugares, não ações.
 class PartnerShell extends StatefulWidget {
   const PartnerShell({super.key, this.demo});
 

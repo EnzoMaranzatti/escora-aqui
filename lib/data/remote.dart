@@ -732,6 +732,33 @@ Future<CouponLookup> partnerFindRedemption(String code) async {
 Future<DateTime> partnerUseRedemption(String code) async =>
     _time(await _db.rpc('partner_use_redemption', params: {'p_code': code}))!;
 
+// ── Parceiro (fase 12): a empresa cria os próprios cupons ───
+
+/// Cria um cupom na empresa de quem chamou e já o põe no catálogo. O banco
+/// confere tudo de novo (nome, faixa de pontos, quantidade, teto de 12 no
+/// ar) e recusa com a mensagem em português.
+Future<void> partnerCreateItem({
+  required String title,
+  required String description,
+  required int cost,
+  required PointsLevel minLevel,
+  int? stock,
+}) => _db.rpc(
+  'partner_create_item',
+  params: {
+    'p_title': title,
+    'p_description': description,
+    'p_points_cost': cost,
+    'p_min_level': minLevel.name,
+    'p_stock': stock,
+  },
+);
+
+/// Tira um cupom do catálogo, ou põe de volta. Não existe apagar: quem já
+/// trocou pontos por ele continua com o código valendo.
+Future<void> partnerSetItemActive(String itemId, bool active) =>
+    _db.rpc('partner_set_item_active', params: {'p_item': itemId, 'p_active': active});
+
 /// "awaitingIndication" → "awaiting_indication" (para quem precisar do nome no banco).
 String dbName(Enum e) => _snake(e.name);
 
