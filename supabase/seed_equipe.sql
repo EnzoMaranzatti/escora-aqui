@@ -33,6 +33,10 @@ FROM (VALUES
     ('00000000-0000-4000-8000-000000000324', 'demo.juliana@example.com', 'Juliana Castro'),
     ('00000000-0000-4000-8000-000000000325', 'demo.sergio@example.com',  'Sérgio Almeida')
 ) AS u (id, email, name)
+-- O índice único de `auth.users` é o e-mail, não o id: se uma destas contas
+-- já tiver sido criada por outro seed (com outro id), o ON CONFLICT (id) não
+-- segura e o script inteiro aborta. Por isso o filtro por e-mail vem antes.
+WHERE NOT EXISTS (SELECT 1 FROM auth.users a WHERE a.email = u.email)
 ON CONFLICT (id) DO NOTHING;
 
 -- ── 3. Três cadastros esperando análise ─────────────────────
@@ -49,7 +53,7 @@ INSERT INTO public.places (
     verified_at, last_reviewed, created_at
 ) VALUES
 (
-    '00000000-0000-4000-8000-000000000133', '00000000-0000-4000-8000-000000000323',
+    '00000000-0000-4000-8000-000000000133', (SELECT id FROM auth.users WHERE email = 'demo.marcos@example.com'),
     'review', 'Casa de Acolhida Novo Dia', 'Abrigo', 'care', 'Marcos Pereira', '(17) 90000-0133',
     '12.345.678/0001-95', 'Associação Casa de Acolhida Novo Dia', 'ativa', NULL,
     'Acolhemos homens em situação de rua por até 90 dias, com banho, cama e ajuda para tirar documentos.',
@@ -61,7 +65,7 @@ INSERT INTO public.places (
     NULL, now() - interval '5 days', now() - interval '5 days'
 ),
 (
-    '00000000-0000-4000-8000-000000000134', '00000000-0000-4000-8000-000000000324',
+    '00000000-0000-4000-8000-000000000134', (SELECT id FROM auth.users WHERE email = 'demo.juliana@example.com'),
     'review', 'Horta Comunitária Boa Esperança', 'Coletivo', 'care', 'Juliana Castro', '(17) 90000-0134',
     NULL, '', '', '00000000-0000-4000-8000-000000000122',
     'Cuidamos de uma horta no terreno da paróquia e dividimos a colheita com 40 famílias do bairro.',
@@ -73,7 +77,7 @@ INSERT INTO public.places (
     NULL, now() - interval '2 days', now() - interval '2 days'
 ),
 (
-    '00000000-0000-4000-8000-000000000135', '00000000-0000-4000-8000-000000000325',
+    '00000000-0000-4000-8000-000000000135', (SELECT id FROM auth.users WHERE email = 'demo.sergio@example.com'),
     'review', 'Instituto Mãos que Ensinam', 'ONG', 'school', 'Sérgio Almeida', '(17) 90000-0135',
     '98.765.432/0001-10', 'Instituto Mãos que Ensinam', 'ativa', NULL,
     'Reforço escolar de matemática e português para crianças do 3º ao 5º ano, no contraturno.',
@@ -109,23 +113,27 @@ WHERE id = '00000000-0000-4000-8000-000000000107'
 
 -- ── 5. Denúncias abertas ────────────────────────────────────
 -- Os motivos são os quatro fixos do app (o CHECK da tabela só aceita esses).
+-- O autor é procurado pelo e-mail; se a conta fictícia não existir neste
+-- banco, a denúncia é pulada em vez de derrubar o script.
 INSERT INTO public.reports (id, place_id, author_id, reason, body, created_at)
-VALUES
-('00000000-0000-4000-8000-00000000b001', '00000000-0000-4000-8000-000000000103',
+SELECT * FROM (VALUES
+('00000000-0000-4000-8000-00000000b001'::uuid, '00000000-0000-4000-8000-000000000103'::uuid,
  (SELECT id FROM auth.users WHERE email = 'demo.ana@example.com'),
- 'O ponto não funciona mais',
- 'Passei lá no sábado e no domingo e estava fechado nos dois dias. Os vizinhos disseram que mudou de endereço.',
+ 'O ponto não funciona mais'::text,
+ 'Passei lá no sábado e no domingo e estava fechado nos dois dias. Os vizinhos disseram que mudou de endereço.'::text,
  now() - interval '4 days'),
-('00000000-0000-4000-8000-00000000b002', '00000000-0000-4000-8000-000000000110',
+('00000000-0000-4000-8000-00000000b002'::uuid, '00000000-0000-4000-8000-000000000110'::uuid,
  (SELECT id FROM auth.users WHERE email = 'demo.bruno@example.com'),
- 'As informações estão erradas',
- 'O horário no app diz até 18h, mas eles fecham às 16h. Perdi a viagem com as doações no carro.',
+ 'As informações estão erradas'::text,
+ 'O horário no app diz até 18h, mas eles fecham às 16h. Perdi a viagem com as doações no carro.'::text,
  now() - interval '2 days'),
-('00000000-0000-4000-8000-00000000b003', '00000000-0000-4000-8000-000000000112',
+('00000000-0000-4000-8000-00000000b003'::uuid, '00000000-0000-4000-8000-000000000112'::uuid,
  (SELECT id FROM auth.users WHERE email = 'demo.camila@example.com'),
- 'Suspeito de golpe',
- 'A chave Pix que aparece no app está no nome de uma pessoa física, e não da paróquia. Achei estranho.',
+ 'Suspeito de golpe'::text,
+ 'A chave Pix que aparece no app está no nome de uma pessoa física, e não da paróquia. Achei estranho.'::text,
  now() - interval '1 day')
+) AS r (id, place_id, author_id, reason, body, created_at)
+WHERE r.author_id IS NOT NULL
 ON CONFLICT (id) DO NOTHING;
 
 -- ── 6. Conferência ─────────────────────────────────────────
