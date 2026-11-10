@@ -244,12 +244,32 @@ class _TourScreenState extends State<TourScreen> {
       case 'team' || 'team-review':
         store.setMode(AppMode.team);
         setState(() => _root = 'team');
-        if (name == 'team-review') push = ReviewScreen(submission: store.queue.first);
+        if (name == 'team-review') {
+          final s = _submissionForTour();
+          if (s != null) push = ReviewScreen(submission: s);
+        }
     }
     if (push != null) {
       final page = push;
       WidgetsBinding.instance.addPostFrameCallback((_) => nav.context.push(page));
     }
+  }
+
+  /// A fila da equipe pode estar vazia (ninguém enviou ponto novo, ou a conta
+  /// não é da equipe) e `queue.first` estourava com "Bad state: No element".
+  /// Para o tour serve qualquer pendência: sem fila, monta uma de mentira com
+  /// o primeiro ponto do banco. Não escreve nada.
+  Submission? _submissionForTour() {
+    final real = store.queue.firstOrNull;
+    if (real != null) return real;
+    final p = store.places.firstOrNull;
+    if (p == null) return null;
+    return Submission(
+      id: 'demo-fila',
+      place: p,
+      kind: SubmissionKind.novo,
+      sentAt: DateTime.now().subtract(const Duration(days: 4)),
+    );
   }
 
   /// Empresa e cupons de mentira, para o modo parceiro aparecer mesmo com

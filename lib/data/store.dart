@@ -126,9 +126,6 @@ class AppStore extends ChangeNotifier {
   String? myPointId;
   PointDraft? draft;
 
-  /// "Aprovado" shows once, the first time the mode opens after approval.
-  bool approvalSeen = false;
-
   // ── Sync ──────────────────────────────────────────────────
   /// Messages for the person when the database refuses an action
   /// (main.dart shows them as a toast).
@@ -302,7 +299,6 @@ class AppStore extends ChangeNotifier {
     draft = null;
     mode = AppMode.donor;
     isTeam = false;
-    approvalSeen = false;
     mapCenter = null;
     radiusKm = 5;
     notifyListeners();
@@ -715,7 +711,6 @@ class AppStore extends ChangeNotifier {
     }
     places.add(p);
     myPointId = p.id;
-    approvalSeen = false;
     draft = null;
     final indicatedById = d.hasCnpj == false
         ? verifiedPlaces.where((x) => x.name == d.indicatedBy).firstOrNull?.id

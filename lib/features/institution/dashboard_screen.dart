@@ -33,15 +33,22 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  late bool _showApproved;
+  /// Fechado nesta sessão (o card sai na hora, sem esperar o banco).
+  bool _approvalDismissed = false;
 
-  @override
-  void initState() {
-    super.initState();
-    final p = store.myPoint!;
-    _showApproved = p.status == PlaceStatus.active && !store.approvalSeen;
-    if (p.status == PlaceStatus.active) store.approvalSeen = true;
-  }
+  /// O aviso de aprovação ainda não lido deste ponto, se existir.
+  ///
+  /// É ele quem decide se o card "está no mapa" aparece. Antes quem decidia
+  /// era `store.approvalSeen`, que só vive em memória: a cada abertura do app
+  /// o card voltava, para sempre. A coluna `read` de `notices` já é gravada no
+  /// banco, então marcar o aviso como lido vale para as próximas aberturas —
+  /// sem precisar de `shared_preferences`.
+  ///
+  /// Ponto aprovado há tempos, sem aviso pendente, não mostra card nenhum:
+  /// é uma boas-vindas, não um estado permanente.
+  Notice? _approvalNotice(Place p) => store.notices
+      .where((n) => n.kind == NoticeKind.approved && !n.read && (n.placeId == null || n.placeId == p.id))
+      .firstOrNull;
 
   @override
   Widget build(BuildContext context) {
@@ -261,7 +268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         primary: 'Falar com a equipe',
         onPrimary: contactTeam,
       ),
-      PlaceStatus.active when _showApproved => _StatusCard(
+      PlaceStatus.active when !_approvalDismissed && _approvalNotice(p) != null => _StatusCard(
         icon: PhosphorIconsFill.sealCheck,
         tone: Tone.success,
         title: '${p.name} está no mapa.',
@@ -269,7 +276,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'Seu ponto foi verificado em ${Fmt.day(p.verifiedAt ?? DateTime.now())}. Agora quem está perto já pode ver o que vocês precisam.',
         primary: 'Criar uma meta',
         onPrimary: () {
-          setState(() => _showApproved = false);
+          final aviso = _approvalNotice(p);
+          if (aviso != null) store.markRead(aviso);
+          setState(() => _approvalDismissed = true);
           context.push(const GoalFlow());
         },
       ),

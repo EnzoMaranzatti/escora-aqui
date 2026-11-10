@@ -220,7 +220,8 @@ class _MonthlyPayScreenState extends State<MonthlyPayScreen> {
       );
     }
     final p = store.place(m.placeId);
-    final key = p.pixKey ?? '';
+    final key = (p.pixKey ?? '').trim();
+    final temChave = key.isNotEmpty;
     final done = m.paidThisMonth;
     final month = Fmt.month(DateTime.now());
     return FlowScaffold(
@@ -229,9 +230,11 @@ class _MonthlyPayScreenState extends State<MonthlyPayScreen> {
       subtitle: done
           ? 'O Pix deste mês já foi registrado. O próximo lembrete chega em ${Fmt.longDay(m.nextDate)}.'
           : 'Copie a chave, faça o Pix no app do seu banco e volte aqui para registrar.',
-      primary: done ? 'Voltar' : 'Copiar chave Pix',
+      primary: (done || !temChave) ? 'Voltar' : 'Copiar chave Pix',
       primaryIcon: null,
-      onPrimary: done ? () => Navigator.of(context).pop() : () => copyPixKey(context, key),
+      onPrimary: (done || !temChave)
+          ? () => Navigator.of(context).pop()
+          : () => copyPixKey(context, key),
       secondary: done ? null : 'Já fiz o Pix',
       onSecondary: done ? null : () => _paid(m),
       children: [
@@ -251,29 +254,37 @@ class _MonthlyPayScreenState extends State<MonthlyPayScreen> {
               const SizedBox(height: 14),
               const Hairline(),
               const SizedBox(height: 14),
-              Text('Chave Pix (${p.pixKeyType}):', style: AppType.body(size: 14)),
-              const SizedBox(height: 6),
-              Pressable(
-                onTap: () => copyPixKey(context, key),
-                scale: .98,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        key,
-                        style: AppType.cardTitle(
-                          size: 18,
-                          color: AppColors.cinza900,
-                        ).copyWith(height: 1.3, fontFeatures: tabular),
+              if (!temChave)
+                Text(
+                  '${p.name} ainda não cadastrou a chave Pix. Fale com a instituição '
+                  'para combinar o pagamento deste mês.',
+                  style: AppType.body(size: 14),
+                )
+              else ...[
+                Text(pixKeyLabel(p), style: AppType.body(size: 14)),
+                const SizedBox(height: 6),
+                Pressable(
+                  onTap: () => copyPixKey(context, key),
+                  scale: .98,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          key,
+                          style: AppType.cardTitle(
+                            size: 18,
+                            color: AppColors.cinza900,
+                          ).copyWith(height: 1.3, fontFeatures: tabular),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Icon(PhosphorIconsRegular.copy, size: 22, color: AppColors.petroleo600),
-                  ],
+                      const SizedBox(width: 10),
+                      const Icon(PhosphorIconsRegular.copy, size: 22, color: AppColors.petroleo600),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text('Confira se o nome aparece como ${p.payee ?? p.legalName}.', style: AppType.body(size: 13.5)),
+                const SizedBox(height: 10),
+                Text('Confira se o nome aparece como ${p.payee ?? p.legalName}.', style: AppType.body(size: 13.5)),
+              ],
             ],
           ),
         ),

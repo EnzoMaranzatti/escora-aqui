@@ -41,6 +41,13 @@ Future<void> copyPixKey(BuildContext context, String key) async {
   }
 }
 
+/// Rotulo da chave. O tipo (CPF, e-mail, telefone...) e opcional no banco:
+/// sem ele, o rotulo nao imprime parenteses vazios nem a palavra "null".
+String pixKeyLabel(Place p) {
+  final tipo = p.pixKeyType?.trim();
+  return (tipo == null || tipo.isEmpty) ? 'Chave Pix:' : 'Chave Pix ($tipo):';
+}
+
 /// Doar via Pix, passo 1: the key, and the fact that the money goes
 /// straight to the institution (the payment happens in the bank's app).
 class PixScreen extends StatelessWidget {
@@ -53,86 +60,96 @@ class PixScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = store.place(placeId);
     final g = store.goal(p, goalId)!;
-    final key = p.pixKey ?? '';
+    final key = (p.pixKey ?? '').trim();
+    final temChave = key.isNotEmpty;
     return FlowScaffold(
-      title: 'Doe via Pix para ${p.name}',
-      primary: 'Copiar chave Pix',
+      title: temChave ? 'Doe via Pix para ${p.name}' : 'A chave Pix não está disponível',
+      primary: temChave ? 'Copiar chave Pix' : 'Voltar',
       primaryIcon: null,
-      onPrimary: () => copyPixKey(context, key),
-      secondary: 'Já fiz o Pix',
-      onSecondary: () => context.push(DeclareScreen(placeId: placeId, goalId: goalId)),
+      onPrimary: temChave ? () => copyPixKey(context, key) : () => Navigator.of(context).pop(),
+      secondary: temChave ? 'Já fiz o Pix' : null,
+      onSecondary: temChave ? () => context.push(DeclareScreen(placeId: placeId, goalId: goalId)) : null,
       children: [
         GoalReminder(text: '${g.headline}. Motivo: ${g.reason}', type: g.type),
         const SizedBox(height: 16),
-        const NoticeBanner(
-          tone: Tone.info,
-          icon: PhosphorIconsFill.shieldCheck,
-          text: 'O dinheiro vai direto para a instituição. O Escora aqui não recebe o valor e não cobra taxa.',
-        ),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.cinza50,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.cinza100),
+        if (!temChave)
+          NoticeBanner(
+            tone: Tone.alert,
+            icon: PhosphorIconsFill.warningCircle,
+            title: '${p.name} ainda não cadastrou a chave Pix.',
+            text: 'Fale com a instituição para combinar o pagamento, ou volte e veja se ela aceita doação de itens.',
+          )
+        else ...[
+          const NoticeBanner(
+            tone: Tone.info,
+            icon: PhosphorIconsFill.shieldCheck,
+            text: 'O dinheiro vai direto para a instituição. O Escora aqui não recebe o valor e não cobra taxa.',
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Chave Pix (${p.pixKeyType}):', style: AppType.body(size: 14)),
-              const SizedBox(height: 6),
-              Pressable(
-                onTap: () => copyPixKey(context, key),
-                scale: .98,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: SelectableText(
-                        key,
-                        style: AppType.cardTitle(
-                          size: 19,
-                          color: AppColors.cinza900,
-                        ).copyWith(height: 1.3, fontFeatures: tabular),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.cinza50,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.cinza100),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(pixKeyLabel(p), style: AppType.body(size: 14)),
+                const SizedBox(height: 6),
+                Pressable(
+                  onTap: () => copyPixKey(context, key),
+                  scale: .98,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          key,
+                          style: AppType.cardTitle(
+                            size: 19,
+                            color: AppColors.cinza900,
+                          ).copyWith(height: 1.3, fontFeatures: tabular),
+                        ),
                       ),
+                      const SizedBox(width: 10),
+                      const Icon(PhosphorIconsRegular.copy, size: 22, color: AppColors.petroleo600),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Hairline(),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(PhosphorIconsRegular.bank, size: 18, color: AppColors.cinza700),
                     ),
                     const SizedBox(width: 10),
-                    const Icon(PhosphorIconsRegular.copy, size: 22, color: AppColors.petroleo600),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Confira no seu banco se o nome aparece como:', style: AppType.body(size: 14)),
+                          const SizedBox(height: 4),
+                          Text(
+                            p.payee ?? p.legalName,
+                            style: AppType.label(
+                              color: AppColors.cinza900,
+                              size: 15.5,
+                            ).copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 14),
-              const Hairline(),
-              const SizedBox(height: 14),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Icon(PhosphorIconsRegular.bank, size: 18, color: AppColors.cinza700),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Confira no seu banco se o nome aparece como:', style: AppType.body(size: 14)),
-                        const SizedBox(height: 4),
-                        Text(
-                          p.payee ?? p.legalName,
-                          style: AppType.label(
-                            color: AppColors.cinza900,
-                            size: 15.5,
-                          ).copyWith(fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
